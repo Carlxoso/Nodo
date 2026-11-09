@@ -1,0 +1,129 @@
+{
+  "nombre": "Jueves 06:00",
+  "descripcion": "Lluvia intensa en Esmeraldas: el río se desborda, un deslizamiento corta una vía y hay un albergue casi lleno.",
+  "nota": "Hospital, bomberos y albergues usan coordenadas reales de OpenStreetMap/Google Maps. Casos, zonas y vías están ubicados cerca de ellos y son simulados.",
+  "incidentes": [
+    {
+      "tipo": "inundacion",
+      "descripcion": "Calle inundada, agua entra a viviendas",
+      "lat": 0.96,
+      "lon": -79.649,
+      "gravedad": 4,
+      "personas_afectadas": 40,
+      "confianza": 70,
+      "hace_min": 55
+    },
+    {
+      "tipo": "inundacion",
+      "descripcion": "Río desbordado en la ribera",
+      "lat": 0.9615,
+      "lon": -79.6475,
+      "gravedad": 5,
+      "personas_afectadas": 90,
+      "confianza": 80,
+      "hace_min": 50
+    },
+    {
+      "tipo": "deslizamiento",
+      "descripcion": "Deslizamiento bloquea la vía",
+      "lat": 0.9712,
+      "lon": -79.6595,
+      "gravedad": 4,
+      "personas_afectadas": 15,
+      "confianza": 60,
+      "hace_min": 40
+    },
+    {
+      "tipo": "rescate",
+      "descripcion": "Familia atrapada en segundo piso",
+      "lat": 0.9585,
+      "lon": -79.6485,
+      "gravedad": 5,
+      "personas_afectadas": 6,
+      "confianza": 50,
+      "hace_min": 25
+    },
+    {
+      "tipo": "otro",
+      "descripcion": "Falta de agua potable y medicinas en el sector",
+      "lat": 0.915,
+      "lon": -79.687,
+      "gravedad": 3,
+      "personas_afectadas": 60,
+      "confianza": 55,
+      "hace_min": 20
+    },
+    {
+      "tipo": "via_cortada",
+      "descripcion": "Vía cortada por agua, sector aislado",
+      "lat": 0.9608,
+      "lon": -79.6482,
+      "gravedad": 3,
+      "personas_afectadas": 30,
+      "confianza": 65,
+      "hace_min": 10
+    }
+  ],
+  "albergues": [
+    {
+      "nombre_contiene": "Unidad Educativa A",
+      "ocupacion": 185,
+      "nombre": "Albergue Unidad Educativa Margarita Cortés (simulado)",
+      "lat": 0.95885,
+      "lon": -79.6507
+    },
+    {
+      "nombre_contiene": "Coliseo B",
+      "ocupacion": 120,
+      "nombre": "Albergue Unidad Educativa Don Bosco (simulado)",
+      "lat": 0.96966,
+      "lon": -79.65803
+    },
+    {
+      "nombre_contiene": "Iglesia C",
+      "ocupacion": 30,
+      "nombre": "Albergue Iglesia María Auxiliadora (simulado)",
+      "lat": 0.9137,
+      "lon": -79.6847
+    }
+  ],
+  "vias": [
+    {
+      "nombre_contiene": "Vía principal norte",
+      "estado": "cortada"
+    },
+    {
+      "nombre_contiene": "Vía a Atacames",
+      "estado": "restringida"
+    },
+    {
+      "nombre_contiene": "Av. central",
+      "estado": "transitable"
+    }
+  ],
+  "alerta": {
+    "zona_contiene": "ribera",
+    "nivel": "critica",
+    "mensaje": "ALERTA OFICIAL DE DEMOSTRACIÓN: lluvia intensa y posible desborde del río. No es una alerta real."
+  },
+  "servicios": [
+    {
+      "tipo": "salud",
+      "nombre": "Hospital del Sur Delfina Torres de Concha (simulado)",
+      "lat": 0.9143844,
+      "lon": -79.6916251
+    },
+    {
+      "tipo": "bomberos",
+      "nombre": "Cuerpo de Bomberos (simulado)",
+      "lat": 0.9663284,
+      "lon": -79.6533646
+    },
+    {
+      "tipo": "agua",
+      "nombre": "Planta de agua (simulada)",
+      "lat": 0.9625,
+      "lon": -79.6455
+    }
+  ]
+}

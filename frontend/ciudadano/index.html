@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#06202C">
+  <title>NODO · Pedir ayuda</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="/compartido/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="icon-192.png" sizes="192x192" type="image/png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="/compartido/base.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body data-vista="inicio">
+  <div id="alerta" class="alerta" role="alert" hidden></div>
+
+  <!-- INICIO: escena inmersiva con el botón de ayuda -->
+  <section id="v-inicio" class="vista inicio" aria-label="Inicio">
+    <div class="escena" aria-hidden="true">
+      <i class="nube n1"></i><i class="nube n2"></i><i class="lluvia"></i>
+      <svg class="olas" viewBox="0 0 1200 220" preserveAspectRatio="none">
+        <path class="ola o3" d="M0 90 C150 40 300 140 450 90 S750 40 900 90 S1050 130 1200 80 V220 H0Z"/>
+        <path class="ola o2" d="M0 120 C150 80 300 160 450 120 S750 80 900 120 S1050 150 1200 110 V220 H0Z"/>
+        <path class="ola o1" d="M0 150 C150 120 300 180 450 150 S750 120 900 150 S1050 175 1200 145 V220 H0Z"/>
+      </svg>
+    </div>
+    <div class="hero">
+      <header class="hero-barra">
+        <span class="logo">
+          <svg class="ic marca" aria-hidden="true" viewBox="0 0 32 32"><use href="/compartido/iconos.svg#marca"></use></svg>
+          NODO
+        </span>
+        <span class="chip js-conexion" role="status">…</span>
+      </header>
+      <h1>¿Necesitas ayuda?</h1>
+      <p class="hero-sub">Toca el botón y avisamos al centro de operaciones de tu ciudad.</p>
+      <button type="button" id="sos" class="sos" aria-label="Pedir ayuda: necesito rescate">
+        <i class="anillo a1"></i><i class="anillo a2"></i><i class="anillo a3"></i>
+        <span class="sos-cuerpo"><b>SOS</b><small>Pedir ayuda</small></span>
+      </button>
+      <p class="hero-nota">NODO no reemplaza a los servicios de emergencia.</p>
+    </div>
+    <div class="hoja-inicio">
+      <div class="ubic-mini" id="ubic-mini">
+        <i class="ub-ico"><svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#ubicacion"></use></svg></i>
+        <div><small>Tu ubicación</small><b id="ubic-mini-txt">Buscando…</b></div>
+        <button type="button" id="mini-reintentar" class="enlace">Actualizar</button>
+      </div>
+      <h2 class="sub-t">O elige qué está pasando</h2>
+      <div id="atajos" class="atajos"></div>
+    </div>
+  </section>
+
+  <!-- NUEVO REPORTE: 3 pasos -->
+  <section id="v-nuevo" class="vista nuevo" aria-label="Nuevo reporte" hidden>
+    <header class="cab">
+      <button type="button" id="atras" class="icono-btn" aria-label="Volver"><svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#volver"></use></svg></button>
+      <h1>Nuevo reporte</h1>
+      <span class="chip js-conexion" role="status">…</span>
+    </header>
+    <ol class="etapas" aria-label="Pasos del reporte">
+      <li data-p="1"><i>1</i><span>Qué pasa</span></li>
+      <li data-p="2"><i>2</i><span>Detalles</span></li>
+      <li data-p="3"><i>3</i><span>Enviar</span></li>
+    </ol>
+    <div class="panos">
+      <div class="pano" data-p="1">
+        <h2 id="h-tipo">¿Qué está pasando?</h2>
+        <div id="tipos" class="tipos" role="group" aria-labelledby="h-tipo"></div>
+        <h2 id="h-grav">¿Qué tan grave es?</h2>
+        <div id="gravedades" class="medidor" role="group" aria-labelledby="h-grav"></div>
+        <p id="grav-texto" class="ayuda"></p>
+      </div>
+      <div class="pano" data-p="2" hidden>
+        <h2>Cuéntanos más <span class="opc">(opcional)</span></h2>
+        <div class="campo">
+          <span class="etiqueta">Personas afectadas</span>
+          <div class="paso">
+            <button type="button" id="menos" aria-label="Una persona menos"><svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#menos"></use></svg></button>
+            <output id="personas" class="num" aria-live="polite">0</output>
+            <button type="button" id="mas" aria-label="Una persona más"><svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#mas"></use></svg></button>
+          </div>
+        </div>
+        <div class="campo">
+          <label class="etiqueta" for="descripcion">Qué ves</label>
+          <textarea id="descripcion" maxlength="500" rows="3" placeholder="Describe el lugar y lo que ocurre"></textarea>
+        </div>
+        <div class="campo">
+          <span class="etiqueta">Foto</span>
+          <input type="file" id="foto" accept="image/*" capture="environment" class="sr-only">
+          <label class="boton-foto" for="foto">
+            <svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#camara"></use></svg>
+            <span id="foto-texto">Tomar o elegir una foto</span>
+          </label>
+          <img id="preview" alt="Vista previa de la foto" hidden>
+        </div>
+        <p class="ayuda">No pedimos tu nombre ni tu teléfono. A la foto se le quitan los datos de ubicación y de cámara antes de enviarse.</p>
+      </div>
+      <div class="pano" data-p="3" hidden>
+        <h2>Revisa y envía</h2>
+        <div id="resumen" class="resumen"></div>
+        <h2 id="h-ubic" class="sub-t">Dónde estás</h2>
+        <div id="ubic" class="ubic">Buscando tu ubicación…</div>
+        <div class="fila">
+          <button type="button" id="btn-ubicar" class="btn-sec">Reintentar GPS</button>
+          <button type="button" id="btn-demo" class="btn-sec" hidden>Usar ubicación de prueba</button>
+        </div>
+        <p id="msg" class="msg" role="status"></p>
+      </div>
+    </div>
+    <footer class="accion">
+      <button type="button" id="siguiente" class="btn grande" disabled><span id="siguiente-txt">Siguiente</span></button>
+      <button type="button" id="enviar" class="btn grande enviar" disabled hidden>
+        <svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#enviar"></use></svg>
+        <span id="enviar-txt">Enviar reporte</span>
+      </button>
+    </footer>
+  </section>
+
+  <!-- MIS REPORTES -->
+  <section id="v-reportes" class="vista claro" aria-label="Mis reportes" hidden>
+    <header class="cab"><h1>Mis reportes</h1><span class="chip js-conexion" role="status">…</span></header>
+    <ul id="lista" class="lista"></ul>
+  </section>
+
+  <!-- AVISOS OFICIALES -->
+  <section id="v-avisos" class="vista claro" aria-label="Avisos" hidden>
+    <header class="cab"><h1>Avisos del centro de operaciones</h1></header>
+    <ul id="avisos-lista" class="avisos-lista"></ul>
+  </section>
+
+  <nav id="nav" class="nav" aria-label="Secciones">
+    <button type="button" data-ir="inicio" aria-current="page"><svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#inicio"></use></svg><span>Inicio</span></button>
+    <button type="button" data-ir="reportes"><svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#reportes"></use></svg><span>Mis reportes</span><i id="b-reportes" class="insignia" hidden></i></button>
+    <button type="button" data-ir="avisos"><svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#avisos"></use></svg><span>Avisos</span><i id="b-avisos" class="insignia" hidden></i></button>
+  </nav>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <div id="exito" class="exito" hidden aria-live="assertive">
+    <svg viewBox="0 0 80 80" aria-hidden="true"><circle cx="40" cy="40" r="34"/><path d="M24 41l11 11 21-24"/></svg>
+    <b id="exito-txt">Reporte enviado</b>
+    <small>El centro de operaciones ya lo puede ver.</small>
+  </div>
+  <script src="/vendor/leaflet/leaflet.js"></script>
+  <script src="app.js"></script>
+  <script src="recorrido.js"></script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Informe del COE · NODO</title>
+  <link rel="icon" href="/compartido/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/compartido/base.css">
+  <link rel="stylesheet" href="informe.css">
+</head>
+<body>
+  <div class="barra-inf no-imprimir">
+    <button id="imprimir" class="btn" disabled>
+      <svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#informe"></use></svg>Imprimir o guardar PDF
+    </button>
+    <button id="actualizar" class="btn-sec">
+      <svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#actualizar"></use></svg>Actualizar
+    </button>
+    <span class="nota">En el cuadro de impresión elige «Guardar como PDF».</span>
+  </div>
+  <main id="hoja" class="hoja" aria-live="polite"><p class="cargando">Preparando el informe…</p></main>
+  <script src="informe.js"></script>
+</body>
+</html>
