@@ -120,7 +120,7 @@ class _Pasos extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 10),
-        child: Row(children: [
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [ // arriba: los puntos quedan alineados aunque un texto ocupe dos líneas
           for (var i = 0; i < pasosTxt.length; i++)
             Expanded(
               child: Column(children: [
