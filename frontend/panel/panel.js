@@ -18,7 +18,7 @@ const ESTADO_NOMBRE = Object.fromEntries(ESTADOS);
 
 // Escapa texto de usuarios antes de meterlo en HTML (evita XSS en descripciones ciudadanas)
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const SOLIDOS = new Set(['inundacion', 'deslizamiento', 'via-cortada', 'rescate', 'otro', 'albergue', 'salud', 'bomberos', 'agua', 'alerta', 'personas']); // íconos sólidos (Font Awesome); el resto, Lucide
+const SOLIDOS = new Set(['inundacion', 'deslizamiento', 'via-cortada', 'rescate', 'otro', 'albergue', 'salud', 'bomberos', 'agua', 'upc', 'alerta', 'personas']); // íconos sólidos (Font Awesome); el resto, Lucide
 const ico = (n) => `<svg class="ic" aria-hidden="true" focusable="false"><use href="/compartido/${SOLIDOS.has(n) ? 'iconos-solidos' : 'iconos'}.svg#${n}"></use></svg>`;
 
 const mapa = L.map('mapa').setView(CENTRO, 13);
@@ -65,13 +65,13 @@ const capas = {
   zonas: L.layerGroup().addTo(mapa),
   vias: L.layerGroup().addTo(mapa),
   albergues: L.layerGroup().addTo(mapa),
-  servicios: L.layerGroup(),
+  servicios: L.layerGroup().addTo(mapa),
   bomberos: L.layerGroup().addTo(mapa),
   incidentes: L.layerGroup().addTo(mapa),
 };
 L.control.layers(null, {
   'Zonas de riesgo': capas.zonas, 'Vías': capas.vias, 'Albergues': capas.albergues,
-  'Bomberos': capas.bomberos, 'Otros servicios': capas.servicios, 'Incidentes': capas.incidentes,
+  'Bomberos': capas.bomberos, 'Hospitales, UPC y otros': capas.servicios, 'Incidentes': capas.incidentes,
 }, { collapsed: false }).addTo(mapa);
 
 const leyenda = L.control({ position: 'bottomright' });
@@ -231,6 +231,14 @@ function marcadorIncidente(p, ll) {
   return m;
 }
 
+// Información al pasar el cursor, con triángulo de alerta cuando hay que tener cuidado
+const TT = { sticky: true, direction: 'top', offset: [0, -6], opacity: 1, className: 'tt-nodo' };
+const ttHtml = (color, alerta, titulo, ...lineas) => `<div class="tt" style="--c:${color}">${alerta ? `<span class="tt-ico">${ico('alerta')}</span>` : ''}<div><b>${esc(titulo)}</b>${lineas.filter(Boolean).map((t) => `<small>${esc(t)}</small>`).join('')}</div></div>`;
+const tooltipZona = (p) => ttHtml(NIVEL[p.nivel] || '#B7791F', true, p.nombre, `Zona de riesgo ${(NIVEL_TXT[p.nivel] || p.nivel).toLowerCase()}`, 'Ten cuidado en esta zona');
+const tooltipVia = (p) => p.estado === 'cortada' ? ttHtml('#D32F2F', true, p.nombre, 'Vía cortada', 'No se puede pasar: usa otra ruta')
+  : p.estado === 'restringida' ? ttHtml('#E09A00', true, p.nombre, 'Paso restringido', 'Avanza con precaución')
+  : ttHtml('#1E9E5A', false, p.nombre, 'Vía transitable');
+const tooltipPeligro = (p, bloq) => ttHtml(bloq ? '#B42318' : '#E09A00', true, `Aviso de peligro: ${TIPO_NOMBRE[p.tipo] || p.tipo}`, bloq ? 'No se puede pasar' : 'Paso con cuidado', 'Reportado por una persona en el camino');
 const VIA_ESTADOS = [['transitable', 'Transitable'], ['restringida', 'Restringida'], ['cortada', 'Cortada']];
 const NIVEL_TXT = { bajo: 'Bajo', medio: 'Medio', alto: 'Alto', critico: 'Crítico' };
 function popupZona(p) {
@@ -261,14 +269,14 @@ function pintarCapas(zonas, vias, albergues, servicios, incidentes) {
 
   L.geoJSON(zonas, {
     style: (f) => ({ color: NIVEL[f.properties.nivel], weight: 2, fillOpacity: 0.22 }),
-    onEachFeature: (f, l) => l.bindPopup(popupZona(f.properties)),
+    onEachFeature: (f, l) => { l.bindPopup(popupZona(f.properties)); l.bindTooltip(tooltipZona(f.properties), TT); },
   }).addTo(capas.zonas);
 
   // Contorno oscuro debajo (resalta la vía sobre cualquier mapa) y el trazo de color encima
   L.geoJSON(vias, { interactive: false, style: () => ({ color: '#0B1F2E', weight: 11, opacity: 0.8, lineCap: 'round', lineJoin: 'round' }) }).addTo(capas.vias);
   L.geoJSON(vias, {
     style: (f) => ({ color: VIA[f.properties.estado], weight: 6, opacity: 1, lineCap: 'round', lineJoin: 'round', dashArray: f.properties.estado === 'cortada' ? '10 8' : null }),
-    onEachFeature: (f, l) => { viasPorId[f.properties.id] = l; l.bindPopup(popupVia(f.properties)); },
+    onEachFeature: (f, l) => { viasPorId[f.properties.id] = l; l.bindPopup(popupVia(f.properties)); l.bindTooltip(tooltipVia(f.properties), TT); },
   }).addTo(capas.vias);
 
   L.geoJSON(albergues, {
@@ -286,11 +294,20 @@ function pintarCapas(zonas, vias, albergues, servicios, incidentes) {
   // Las estaciones de bomberos tienen su propia capa (visible desde el inicio); salud y agua van en «Otros servicios»
   const pintarServicios = (filtro, capa) => L.geoJSON(servicios, {
     filter: (f) => filtro(f.properties.tipo),
-    pointToLayer: (f, ll) => L.marker(ll, { icon: L.divIcon({ className: '', iconSize: [30, 30], iconAnchor: [15, 15], html: `<div class="svc${f.properties.tipo === 'bomberos' ? ' svc-bomberos' : ''}">${ico(['salud', 'agua', 'bomberos'].includes(f.properties.tipo) ? f.properties.tipo : 'info')}</div>` }) }),
-    onEachFeature: (f, l) => l.bindPopup(`<b>${esc(f.properties.nombre)}</b><br>${esc(SERVICIO_NOMBRE[f.properties.tipo] || f.properties.tipo)}`),
+    pointToLayer: (f, ll) => L.marker(ll, { icon: L.divIcon({ className: '', iconSize: [30, 30], iconAnchor: [15, 15], html: `<div class="svc svc-${esc(f.properties.tipo)}">${icoServicio(f.properties.tipo)}</div>` }) }),
+    onEachFeature: (f, l) => {
+      l.bindPopup(`<div class="pop"><b>${esc(f.properties.nombre)}</b><br>${esc(SERVICIO_NOMBRE[f.properties.tipo] || f.properties.tipo)}<div class="acciones"><button class="peligro" data-del-svc="${esc(f.properties.id)}">${ico('eliminar')}<span class="t">Eliminar lugar</span></button></div></div>`);
+      l.bindTooltip(ttHtml('#0E5C73', false, f.properties.nombre, SERVICIO_NOMBRE[f.properties.tipo] || f.properties.tipo), TT);
+    },
   }).addTo(capa);
   pintarServicios((t) => t === 'bomberos', capas.bomberos);
   pintarServicios((t) => t !== 'bomberos', capas.servicios);
+
+  // Vías cortadas (para que las rutas las esquiven); si cambian, se recalculan las rutas dibujadas
+  viasCortadas = ((vias && vias.features) || []).filter((f) => f.properties.estado === 'cortada' && f.geometry)
+    .map((f) => ({ id: f.properties.id, nombre: f.properties.nombre, lineas: f.geometry.type === 'MultiLineString' ? f.geometry.coordinates : [f.geometry.coordinates] }));
+  const firma = viasCortadas.map((v) => `${v.id}:${v.lineas.reduce((n, l) => n + l.length, 0)}:${v.lineas[0][0]}`).sort().join('|');
+  if (firma !== firmaCortadas) { const habia = firmaCortadas !== null; firmaCortadas = firma; if (habia) setTimeout(recalcularRutas, 0); }
 
   const porId = {};
   // Avisos de peligro con tramo dibujado por la ciudadanía: se muestran sobre la calle (rojo discontinuo = no se puede pasar, ámbar = con cuidado)
@@ -299,7 +316,7 @@ function pintarCapas(zonas, vias, albergues, servicios, incidentes) {
     if (!Array.isArray(t) || t.length < 2 || f.properties.estado === 'atendido') continue;
     const ll = t.map(([lo, la]) => [la, lo]), bloq = f.properties.gravedad >= 4;
     L.polyline(ll, { color: '#0B1F2E', weight: 11, opacity: 0.8, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(capas.incidentes);
-    L.polyline(ll, { color: bloq ? '#B42318' : '#E0A030', weight: 6, lineCap: 'round', lineJoin: 'round', dashArray: bloq ? '10 8' : null, interactive: false }).addTo(capas.incidentes);
+    L.polyline(ll, { color: bloq ? '#B42318' : '#E0A030', weight: 6, lineCap: 'round', lineJoin: 'round', dashArray: bloq ? '10 8' : null }).bindTooltip(tooltipPeligro(f.properties, bloq), TT).addTo(capas.incidentes);
   }
   datosPorId = {};
   L.geoJSON(incidentes, {
@@ -437,6 +454,7 @@ function enlazarPopup(popup) {
   el.querySelectorAll('button[data-estado]').forEach((b) => { b.onclick = () => cambiarEstado(b.dataset.id, b.dataset.estado); });
   el.querySelectorAll('button[data-eliminar]').forEach((b) => { b.onclick = () => pedirEliminar(b, () => eliminarCaso(b.dataset.eliminar)); });
   el.querySelectorAll('button[data-del-zona]').forEach((b) => { b.onclick = () => pedirEliminar(b, () => borrar(`/api/zonas/${b.dataset.delZona}`, 'la zona')); });
+  el.querySelectorAll('button[data-del-svc]').forEach((b) => { b.onclick = () => pedirEliminar(b, () => borrar(`/api/servicios/${b.dataset.delSvc}`, 'el lugar')); });
   el.querySelectorAll('button[data-del-alb]').forEach((b) => { b.onclick = () => pedirEliminar(b, () => borrar(`/api/albergues/${b.dataset.delAlb}`, 'el albergue')); });
   el.querySelectorAll('button[data-del-via]').forEach((b) => { b.onclick = () => pedirEliminar(b, () => borrar(`/api/vias/${b.dataset.delVia}`, 'la vía')); });
   el.querySelectorAll('button[data-ajustar-via]').forEach((b) => { b.onclick = () => ajustarVia(b.dataset.ajustarVia, b); });
@@ -602,6 +620,109 @@ async function rutaDetallada(paradas) {
 }
 const rutaPorCalles = async (paradas) => (await rutaDetallada(paradas)).coords;
 
+// ---------- Rutas que esquivan las vías cortadas ----------
+// OSRM no sabe qué vías cortó el COE, así que cada ruta se revisa contra ellas: si cruza una vía cortada se prueban las rutas
+// alternativas y, si hace falta, se fuerza un desvío por un punto lateral. Se elige la más corta que no cruce ninguna vía cortada.
+let viasCortadas = [];   // [{ id, nombre, lineas: [[[lon, lat], ...]] }]
+let firmaCortadas = null;
+const UMBRAL_CORTE_M = 18;   // distancia a la que una ruta se considera sobre una vía cortada
+const EXCLUIR_EXTREMOS_M = 70; // junto al origen o al destino no se exige esquivar (el caso puede estar sobre la vía cortada)
+const mLat = 110574, mLon = (la) => 111320 * Math.cos(la * Math.PI / 180);
+const aXY = (p, o) => [(p[0] - o[0]) * mLon(o[1]), (p[1] - o[1]) * mLat];
+function distPuntoSeg(p, a, b) {
+  const dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy;
+  let t = l2 ? ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2 : 0;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy));
+}
+function seCruzan(a, b, c, d) {
+  const o = (p, q, r) => (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
+  return o(a, b, c) * o(a, b, d) < 0 && o(c, d, a) * o(c, d, b) < 0;
+}
+function distSegmentos(a, b, c, d) {
+  if (seCruzan(a, b, c, d)) return 0;
+  return Math.min(distPuntoSeg(a, c, d), distPuntoSeg(b, c, d), distPuntoSeg(c, a, b), distPuntoSeg(d, a, b));
+}
+// Devuelve dónde la ruta (coords [[lon, lat], ...]) toca una vía cortada: [{ via, punto, tangente }], una por vía
+function crucesCortadas(coords) {
+  const res = [];
+  if (!viasCortadas.length || coords.length < 2) return res;
+  const ini = coords[0], fin = coords[coords.length - 1], o = ini;
+  const iniXY = [0, 0], finXY = aXY(fin, o);
+  for (const v of viasCortadas) {
+    let hallado = null;
+    for (const linea of v.lineas) {
+      const L2 = linea.map((q) => aXY(q, o));
+      for (let i = 0; i < coords.length - 1 && !hallado; i++) {
+        const a = aXY(coords[i], o), b = aXY(coords[i + 1], o);
+        const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+        if (Math.hypot(mid[0] - iniXY[0], mid[1] - iniXY[1]) < EXCLUIR_EXTREMOS_M || Math.hypot(mid[0] - finXY[0], mid[1] - finXY[1]) < EXCLUIR_EXTREMOS_M) continue;
+        for (let j = 0; j < L2.length - 1; j++) {
+          if (distSegmentos(a, b, L2[j], L2[j + 1]) < UMBRAL_CORTE_M) {
+            const tx = L2[j + 1][0] - L2[j][0], ty = L2[j + 1][1] - L2[j][1], n = Math.hypot(tx, ty) || 1;
+            hallado = { via: v, punto: coords[i], tangente: [tx / n, ty / n] };
+            break;
+          }
+        }
+      }
+      if (hallado) break;
+    }
+    if (hallado) res.push(hallado);
+  }
+  return res;
+}
+const nombresVias = (cruces) => [...new Set(cruces.map((c) => c.via.nombre))].join(', ');
+// Punto a `dist` metros de `punto` en la dirección (dx, dy) (metros)
+const desplazar = (punto, dx, dy, dist) => [punto[0] + (dx * dist) / mLon(punto[1]), punto[1] + (dy * dist) / mLat];
+
+async function rutasOSRM(paradas, alternativas) {
+  const ctrl = new AbortController(), t = setTimeout(() => ctrl.abort(), 9000);
+  try {
+    const ruta = paradas.map((p) => `${p[0].toFixed(6)},${p[1].toFixed(6)}`).join(';');
+    const r = await fetch(`https://router.project-osrm.org/route/v1/driving/${ruta}?overview=full&geometries=geojson${alternativas ? '&alternatives=true' : ''}`, { signal: ctrl.signal });
+    const d = await r.json();
+    if (d.code !== 'Ok' || !d.routes || !d.routes.length) throw new Error('sin ruta');
+    return d.routes.map((x) => ({ coords: x.geometry.coordinates, distancia: x.distance, duracion: x.duration }));
+  } finally { clearTimeout(t); }
+}
+
+// Mejor ruta desde una base hasta el destino: { coords, distancia, duracion, base, desvio, bloqueada }
+//   desvio: nombres de las vías cortadas que se esquivaron · bloqueada: nombres de las que no se pudo esquivar
+async function rutaDesdeBase(base, destino) {
+  const origen = [base.lon, base.lat];
+  const rs = await rutasOSRM([origen, destino], viasCortadas.length > 0);
+  const original = rs[0], cruces0 = crucesCortadas(original.coords);
+  if (!cruces0.length) return { ...original, base, desvio: null, bloqueada: null };
+  const nombres = nombresVias(cruces0);
+  const libres = rs.slice(1).filter((r) => !crucesCortadas(r.coords).length).sort((a, b) => a.duracion - b.duracion);
+  if (libres.length) return { ...libres[0], base, desvio: nombres, bloqueada: null };
+  // Desvío forzado: un punto de paso a un lado de la vía cortada. Se prueba en las cuatro direcciones (a lo largo y a lo ancho de
+  // la vía cortada) y a distancias crecientes: si la ruta cruza la vía, conviene rodearla; si va por ella, tomar una calle paralela.
+  const c = cruces0[0], [tx, ty] = c.tangente, nx = -ty, ny = tx;
+  for (const dist of [300, 600, 1000]) {
+    const puntos = [desplazar(c.punto, nx, ny, dist), desplazar(c.punto, -nx, -ny, dist), desplazar(c.punto, tx, ty, dist), desplazar(c.punto, -tx, -ty, dist)];
+    const intentos = await Promise.all(puntos.map((w) => rutasOSRM([origen, w, destino], false).then((x) => x[0]).catch(() => null)));
+    const validas = intentos.filter((r) => r && !crucesCortadas(r.coords).length).sort((a, b) => a.duracion - b.duracion);
+    if (validas.length) return { ...validas[0], base, desvio: nombres, bloqueada: null };
+  }
+  return { ...original, base, desvio: null, bloqueada: nombres };
+}
+// Evalúa las bases más cercanas y se queda con la mejor (sin cruce y más rápida). Si la primera sale limpia, no consulta más.
+async function mejorRuta(bases, destino) {
+  const cand = [];
+  for (const b of bases) {
+    try {
+      const r = await rutaDesdeBase(b, destino);
+      cand.push(r);
+      if (!r.bloqueada && !r.desvio) break;
+    } catch (e) { if (!cand.length && b === bases[bases.length - 1]) throw e; }
+  }
+  if (!cand.length) throw new Error('sin ruta');
+  cand.sort((a, b) => (a.bloqueada ? 1 : 0) - (b.bloqueada ? 1 : 0) || a.duracion - b.duracion);
+  return cand[0];
+}
+
+
 // Reajusta una vía ya dibujada para que siga las calles (usa sus extremos y algunos puntos intermedios)
 async function ajustarVia(id, btn) {
   const l = viasPorId[id];
@@ -622,7 +743,13 @@ async function ajustarVia(id, btn) {
   }
 }
 
-const dib = { modo: null, puntos: [], tramos: [], marcas: L.layerGroup().addTo(mapa), pendientes: 0, sesion: 0, vista: null, aviso: '' };
+const LUGAR_FORM = {
+  bomberos: { titulo: 'Nueva estación de bomberos', ayuda: 'Haz clic en el mapa donde está la estación. Las rutas de emergencia saldrán desde la más cercana.', ejemplo: 'Ej.: Cuartel de Bomberos Norte' },
+  salud: { titulo: 'Nuevo hospital o centro de salud', ayuda: 'Haz clic en el mapa donde está el hospital o centro de salud.', ejemplo: 'Ej.: Hospital Delfina Torres' },
+  upc: { titulo: 'Nueva UPC', ayuda: 'Haz clic en el mapa donde está la Unidad de Policía Comunitaria.', ejemplo: 'Ej.: UPC La Tolita' },
+  otro: { titulo: 'Nuevo lugar personalizado', ayuda: 'Haz clic en el mapa donde está el lugar. Escribe su nombre y, si quieres, de qué tipo es.', ejemplo: 'Ej.: Mercado central' },
+};
+const dib = { modo: null, sub: null, puntos: [], tramos: [], marcas: L.layerGroup().addTo(mapa), pendientes: 0, sesion: 0, vista: null, aviso: '' };
 const mapaEl = document.getElementById('mapa');
 const editor = document.createElement('div');
 editor.className = 'editor'; editor.hidden = true;
@@ -634,9 +761,24 @@ herramientas.onAdd = () => {
   const d = L.DomUtil.create('div', 'herramientas');
   d.innerHTML = `<button type="button" data-modo="zona" title="Dibujar una zona de riesgo" aria-label="Dibujar una zona de riesgo">${ico('zona')}<span>Zona</span></button>
     <button type="button" data-modo="via" title="Dibujar una vía por las calles" aria-label="Dibujar una vía por las calles">${ico('ruta')}<span>Vía</span></button>
-    <button type="button" data-modo="albergue" title="Agregar un albergue en el mapa" aria-label="Agregar un albergue en el mapa">${ico('albergue')}<span>Albergue</span></button>`;
+    <div class="lugares-wrap">
+      <button type="button" id="btn-lugares" data-modo="lugares" aria-haspopup="menu" aria-expanded="false" title="Agregar un lugar al mapa" aria-label="Agregar un lugar al mapa">${ico('ubicacion')}<span>Lugares</span>${ico('desplegar')}</button>
+      <div class="lugares-menu" role="menu" hidden>
+        <button type="button" role="menuitem" data-lugar="albergue">${ico('albergue')}<span>Albergue</span></button>
+        <button type="button" role="menuitem" data-lugar="bomberos">${ico('bomberos')}<span>Bomberos</span></button>
+        <button type="button" role="menuitem" data-lugar="upc">${ico('upc')}<span>UPC</span></button>
+        <button type="button" role="menuitem" data-lugar="salud">${ico('salud')}<span>Hospital</span></button>
+        <button type="button" role="menuitem" data-lugar="otro">${ico('otro')}<span>Personalizado</span></button>
+      </div>
+    </div>`;
   if (L.DomEvent) L.DomEvent.disableClickPropagation(d);
-  d.querySelectorAll('button').forEach((b) => { b.onclick = () => (dib.modo === b.dataset.modo ? cancelarDibujo() : iniciarDibujo(b.dataset.modo)); });
+  d.querySelectorAll(':scope > button').forEach((b) => { b.onclick = () => (dib.modo === b.dataset.modo ? cancelarDibujo() : iniciarDibujo(b.dataset.modo)); });
+  const menu = d.querySelector('.lugares-menu'), btnL = d.querySelector('#btn-lugares');
+  const abrirMenu = (si) => { menu.hidden = !si; btnL.setAttribute('aria-expanded', String(si)); };
+  btnL.onclick = () => { if (dib.modo === 'albergue' || dib.modo === 'servicio') { cancelarDibujo(); abrirMenu(false); } else abrirMenu(menu.hidden); };
+  menu.querySelectorAll('button[data-lugar]').forEach((b) => { b.onclick = () => { abrirMenu(false); iniciarDibujo(b.dataset.lugar === 'albergue' ? 'albergue' : 'servicio', b.dataset.lugar); }; });
+  document.addEventListener('pointerdown', (e) => { if (!menu.hidden && !e.target.closest('.lugares-wrap')) abrirMenu(false); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !menu.hidden) abrirMenu(false); });
   return d;
 };
 herramientas.addTo(mapa);
@@ -647,13 +789,27 @@ const dibGeometria = () => {
   return out;
 };
 
-function iniciarDibujo(modo) {
+function iniciarDibujo(modo, sub) {
   cancelarDibujo();
   mapa.closePopup();
-  dib.modo = modo; dib.puntos = []; dib.tramos = []; dib.pendientes = 0; dib.aviso = ''; dib.sesion++;
+  dib.modo = modo; dib.sub = sub || null; dib.puntos = []; dib.tramos = []; dib.pendientes = 0; dib.aviso = ''; dib.sesion++;
   mapaEl.classList.add('dibujando');
-  document.querySelectorAll('.herramientas button').forEach((b) => b.classList.toggle('activa', b.dataset.modo === modo));
+  document.querySelectorAll('.herramientas > button, #btn-lugares').forEach((b) => b.classList.toggle('activa', b.dataset.modo === modo || (b.id === 'btn-lugares' && (modo === 'albergue' || modo === 'servicio'))));
   const zona = modo === 'zona';
+  if (modo === 'servicio') {
+    const info = LUGAR_FORM[sub] || LUGAR_FORM.otro;
+    editor.innerHTML = `<b>${esc(info.titulo)}</b>
+      <p class="ayuda">${esc(info.ayuda)}</p>
+      <label>Nombre <input id="ed-nombre" maxlength="80" placeholder="${esc(info.ejemplo)}"></label>
+      ${sub === 'otro' ? '<label>Tipo de lugar (opcional) <input id="ed-etiqueta" maxlength="30" placeholder="Ej.: Mercado, gasolinera, puente"></label>' : ''}
+      <div class="ed-acc"><button type="button" id="ed-guardar" class="btn">Guardar</button><button type="button" id="ed-cancelar" class="btn-sec">Cancelar</button></div>
+      <p id="ed-msg" class="ed-msg" role="status"></p>`;
+    editor.hidden = false;
+    document.getElementById('ed-guardar').onclick = guardarDibujo;
+    document.getElementById('ed-cancelar').onclick = cancelarDibujo;
+    document.getElementById('ed-nombre').onkeydown = (e) => { if (e.key === 'Enter') guardarDibujo(); };
+    return refrescarDibujo();
+  }
   if (modo === 'albergue') {
     editor.innerHTML = `<b>Nuevo albergue</b>
       <p class="ayuda">Haz clic en el mapa donde está el albergue. Puedes volver a hacer clic para moverlo.</p>
@@ -686,7 +842,7 @@ function iniciarDibujo(modo) {
 }
 
 function cancelarDibujo() {
-  dib.modo = null; dib.puntos = []; dib.tramos = []; dib.pendientes = 0; dib.sesion++;
+  dib.modo = null; dib.sub = null; dib.puntos = []; dib.tramos = []; dib.pendientes = 0; dib.sesion++;
   dib.marcas.clearLayers();
   if (dib.vista) { mapa.removeLayer(dib.vista); dib.vista = null; }
   editor.hidden = true; editor.innerHTML = '';
@@ -696,7 +852,7 @@ function cancelarDibujo() {
 
 function refrescarDibujo() {
   if (!dib.modo) return;
-  if (dib.modo === 'albergue') {
+  if (dib.modo === 'albergue' || dib.modo === 'servicio') {
     dib.marcas.clearLayers();
     dib.puntos.forEach((p) => L.circleMarker(p, { radius: 9, color: '#fff', weight: 3, fillColor: '#2F7D5B', fillOpacity: 1, interactive: false }).addTo(dib.marcas));
     document.getElementById('ed-guardar').disabled = dib.puntos.length < 1;
@@ -727,7 +883,7 @@ function deshacerPunto() {
 
 mapa.on('click', async (e) => {
   if (!dib.modo) return;
-  if (dib.modo === 'albergue') { dib.puntos = [e.latlng]; return refrescarDibujo(); }
+  if (dib.modo === 'albergue' || dib.modo === 'servicio') { dib.puntos = [e.latlng]; return refrescarDibujo(); }
   dib.puntos.push(e.latlng);
   if (dib.modo === 'zona' || dib.puntos.length < 2) { dib.tramos.push(null); return refrescarDibujo(); }
   const sesion = dib.sesion, i = dib.puntos.length - 2, a = dib.puntos[i], b = e.latlng;
@@ -759,7 +915,25 @@ async function guardarAlbergue() {
   } catch (e) { guardar.disabled = false; if (e.message !== 'auth') msg.textContent = 'No se pudo guardar: ' + e.message; }
 }
 
+async function guardarServicio() {
+  const msg = document.getElementById('ed-msg');
+  let nombre = document.getElementById('ed-nombre').value.trim();
+  const et = document.getElementById('ed-etiqueta');
+  const etiqueta = et ? et.value.trim() : '';
+  if (!nombre) { msg.textContent = 'Escribe un nombre.'; document.getElementById('ed-nombre').focus(); return; }
+  if (etiqueta) nombre = `${nombre} (${etiqueta})`;
+  if (nombre.length > 80) { msg.textContent = 'El nombre es demasiado largo (máx. 80 caracteres).'; return; }
+  if (!dib.puntos.length) { msg.textContent = 'Marca la ubicación en el mapa.'; return; }
+  const guardar = document.getElementById('ed-guardar');
+  guardar.disabled = true;
+  try {
+    await mandar('/api/servicios', 'POST', { tipo: dib.sub, nombre, coordenadas: [[dib.puntos[0].lng, dib.puntos[0].lat]] });
+    cancelarDibujo(); cargar();
+  } catch (e) { guardar.disabled = false; if (e.message !== 'auth') msg.textContent = 'No se pudo guardar: ' + e.message; }
+}
+
 async function guardarDibujo() {
+  if (dib.modo === 'servicio') return guardarServicio();
   if (dib.modo === 'albergue') return guardarAlbergue();
   const zona = dib.modo === 'zona';
   const nombre = document.getElementById('ed-nombre').value.trim(), tipo = document.getElementById('ed-tipo').value, msg = document.getElementById('ed-msg');
@@ -790,14 +964,11 @@ function quitarRuta() {
   if (rutaTemp) { mapa.removeLayer(rutaTemp.grupo); rutaTemp = null; }
   rutaChip.hidden = true; rutaChip.innerHTML = '';
 }
-function baseMasCercana(ll) {
-  let mejor = null, dmin = Infinity;
-  for (const f of serviciosCache) {
-    if (f.properties.tipo !== 'bomberos' || !f.geometry) continue;
-    const [lo, la] = f.geometry.coordinates, d = mapa.distance(ll, [la, lo]);
-    if (d < dmin) { dmin = d; mejor = { nombre: f.properties.nombre, lat: la, lon: lo }; }
-  }
-  return mejor;
+function basesCercanas(ll, n) {
+  return serviciosCache
+    .filter((f) => f.properties.tipo === 'bomberos' && f.geometry)
+    .map((f) => { const [lo, la] = f.geometry.coordinates; return { nombre: f.properties.nombre, lat: la, lon: lo, d: mapa.distance(ll, [la, lo]) }; })
+    .sort((a, b) => a.d - b.d).slice(0, n);
 }
 const tiempoTxt = (seg) => { const m = Math.max(1, Math.round(seg / 60)); return m >= 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m} min`; };
 // Color de la ruta según el estado del caso: azul = sin unidad asignada, naranja = unidad en camino, rojo = unidad en el sitio
@@ -820,21 +991,52 @@ async function mostrarRuta(m) {
   const id = rutaId, p = m.caso, ll = m.getLatLng();
   if (rutasFijas.has(String(p.id))) return; // ya está fijada y a la vista
   if (p.estado === 'atendido') return;       // un caso atendido ya no tiene ruta en curso
-  const base = baseMasCercana(ll);
-  if (!base) return;
+  const bases = basesCercanas(ll, 2);
+  if (!bases.length) return;
   rutaChip.hidden = false; rutaChip.textContent = 'Calculando la ruta…';
   try {
-    const r = await rutaDetallada([[base.lon, base.lat], [ll.lng, ll.lat]]);
+    const r = await mejorRuta(bases, [ll.lng, ll.lat]);
     if (id !== rutaId) return;
-    const pts = r.coords.map(([lo, la]) => [la, lo]);
+    const pts = r.coords.map(([lo, la]) => [la, lo]), base = r.base;
     const est = estiloRuta(p);
-    rutaTemp = { casoId: String(p.id), tipo: p.tipo, pts, base, color: est.c, estado: est.t, grupo: dibujarRuta(pts, base, est.c), limites: L.polyline(pts).getBounds(), distancia: Math.round(r.distancia), duracion: r.duracion };
-    rutaChip.innerHTML = `${ico('bomberos')}<span>Desde <b>${esc(base.nombre)}</b>: <b>${metros(rutaTemp.distancia)}</b>, <b>${tiempoTxt(r.duracion)}</b></span>
-      <button type="button" data-ruta="fijar">${ico('fijar')}Fijar ruta</button><button type="button" data-ruta="ver">Ver completa</button><button type="button" data-ruta="quitar" aria-label="Quitar la ruta">${ico('cerrar')}</button>`;
+    rutaTemp = { casoId: String(p.id), tipo: p.tipo, pts, base, color: est.c, estado: est.t, grupo: dibujarRuta(pts, base, est.c), limites: L.polyline(pts).getBounds(), distancia: Math.round(r.distancia), duracion: r.duracion, destino: [ll.lng, ll.lat], desvio: r.desvio, bloqueada: r.bloqueada };
+    pintarChipRuta();
   } catch {
     if (id !== rutaId) return;
     rutaChip.textContent = 'No se pudo calcular la ruta. Revisa la conexión a internet.';
     setTimeout(() => { if (id === rutaId) quitarRuta(); }, 4000);
+  }
+}
+function pintarChipRuta() {
+  const r = rutaTemp;
+  if (!r) return;
+  const aviso = r.desvio ? `<small class="ruta-aviso">${ico('alerta')}<span>Desvío: <b>${esc(r.desvio)}</b> está cortada, la ruta la esquiva.</span></small>`
+    : r.bloqueada ? `<small class="ruta-aviso mal">${ico('alerta')}<span>Sin desvío posible: <b>${esc(r.bloqueada)}</b> está cortada y la ruta pasa por ahí.</span></small>` : '';
+  rutaChip.innerHTML = `${ico('bomberos')}<span>Desde <b>${esc(r.base.nombre)}</b>: <b>${metros(r.distancia)}</b>, <b>${tiempoTxt(r.duracion)}</b></span>
+    <button type="button" data-ruta="fijar">${ico('fijar')}Fijar ruta</button><button type="button" data-ruta="ver">Ver completa</button><button type="button" data-ruta="quitar" aria-label="Quitar la ruta">${ico('cerrar')}</button>${aviso}`;
+}
+// Cuando cambia el conjunto de vías cortadas, las rutas dibujadas (la temporal y las fijadas) se recalculan con el mismo destino
+let recalculando = false, recalcularOtra = false;
+async function recalcularRutas() {
+  if (recalculando) { recalcularOtra = true; return; }
+  recalculando = true;
+  try {
+    const lista = [...(rutaTemp ? [rutaTemp] : []), ...rutasFijas.values()];
+    for (const r of lista) {
+      if (!r.destino) continue;
+      try {
+        const n = await mejorRuta(basesCercanas(L.latLng(r.destino[1], r.destino[0]), 2), r.destino);
+        const vigente = r === rutaTemp || rutasFijas.get(r.casoId) === r;
+        if (!vigente) continue;
+        mapa.removeLayer(r.grupo);
+        r.pts = n.coords.map(([lo, la]) => [la, lo]); r.base = n.base; r.distancia = Math.round(n.distancia); r.duracion = n.duracion; r.desvio = n.desvio; r.bloqueada = n.bloqueada;
+        r.grupo = dibujarRuta(r.pts, r.base, r.color); r.limites = L.polyline(r.pts).getBounds();
+      } catch { /* sin internet o sin ruta: se deja la que estaba */ }
+    }
+    pintarChipRuta(); pintarRutasFijas();
+  } finally {
+    recalculando = false;
+    if (recalcularOtra) { recalcularOtra = false; recalcularRutas(); }
   }
 }
 function fijarRuta() {
@@ -844,7 +1046,7 @@ function fijarRuta() {
   pintarRutasFijas();
 }
 function pintarRutasFijas() {
-  rutaFijasEl.innerHTML = [...rutasFijas.entries()].map(([id, f]) => `<div class="ruta-fija" style="--rc:${esc(f.color || '#1A73E8')}">${ico('fijar')}<span><b>${esc(TIPO_NOMBRE[f.tipo] || f.tipo)}</b>: ${metros(f.distancia)}, ${tiempoTxt(f.duracion)}${f.estado && f.estado !== 'Sin asignar' ? ` · <em class="ruta-est">${esc(f.estado)}</em>` : ''}</span>
+  rutaFijasEl.innerHTML = [...rutasFijas.entries()].map(([id, f]) => `<div class="ruta-fija" style="--rc:${esc(f.color || '#1A73E8')}">${ico('fijar')}<span><b>${esc(TIPO_NOMBRE[f.tipo] || f.tipo)}</b>: ${metros(f.distancia)}, ${tiempoTxt(f.duracion)}${f.estado && f.estado !== 'Sin asignar' ? ` · <em class="ruta-est">${esc(f.estado)}</em>` : ''}${f.desvio ? ` · <em class="ruta-est" title="Esquiva: ${esc(f.desvio)}">Desvío</em>` : f.bloqueada ? ` · <em class="ruta-est" style="--rc:#B42318" title="${esc(f.bloqueada)} está cortada">Sin desvío</em>` : ''}</span>
     <button type="button" data-fija="ver" data-id="${esc(id)}">Ver</button><button type="button" data-fija="quitar" data-id="${esc(id)}" aria-label="Quitar la ruta fijada">${ico('cerrar')}</button></div>`).join('');
 }
 function quitarRutaFijada(id) {
@@ -929,7 +1131,8 @@ const vistaTablero = document.getElementById('vista-tablero');
 let ultimoPorId = {}, tabActiva = 'casos', tableroPendiente = false, ultimaFirmaTablero = '';
 const NIVEL_NOMBRE = { bajo: 'Bajo', medio: 'Medio', alto: 'Alto', critico: 'Crítico' };
 const ALERTA_NIVEL = { informativa: 'Informativa', preventiva: 'Preventiva', critica: 'Crítica' };
-const SERVICIO_NOMBRE = { salud: 'Hospital o centro de salud', agua: 'Agua potable', bomberos: 'Bomberos' };
+const SERVICIO_NOMBRE = { salud: 'Hospital o centro de salud', agua: 'Agua potable', bomberos: 'Bomberos', upc: 'UPC (Policía Comunitaria)', otro: 'Lugar personalizado' };
+const icoServicio = (t) => ico(['salud', 'agua', 'bomberos', 'upc'].includes(t) ? t : 'otro');
 const metros = (m) => (m >= 1000 ? (m / 1000).toFixed(1).replace('.', ',') + ' km' : m + ' m');
 const plural = (n, s, p) => `${n} ${n === 1 ? s : p}`;
 const vacio = (t) => `<p class="sec">${t}</p>`;
@@ -1022,7 +1225,7 @@ function pintarTablero(t) {
   // ¿Cómo se coordina?
   const co = t.coordinacion;
   const est = Object.fromEntries(co.estados.map((e) => [e.estado, e.n]));
-  const c8 = (co.caso ? `<p class="sec">Servicios más cercanos al caso más urgente:</p>` + (co.servicios.length ? co.servicios.map((s) => `<div class="fila-q"><span>${ico(['salud', 'agua', 'bomberos'].includes(s.tipo) ? s.tipo : 'info')} ${esc(s.nombre)}<small class="bloque">${esc(SERVICIO_NOMBRE[s.tipo] || s.tipo)}</small></span><span class="num">${metros(s.distancia_m)}</span></div>`).join('') : vacio('Sin servicios cargados.')) : vacio('Sin casos abiertos.')) +
+  const c8 = (co.caso ? `<p class="sec">Servicios más cercanos al caso más urgente:</p>` + (co.servicios.length ? co.servicios.map((s) => `<div class="fila-q"><span>${icoServicio(s.tipo)} ${esc(s.nombre)}<small class="bloque">${esc(SERVICIO_NOMBRE[s.tipo] || s.tipo)}</small></span><span class="num">${metros(s.distancia_m)}</span></div>`).join('') : vacio('Sin servicios cargados.')) : vacio('Sin casos abiertos.')) +
     `<p class="sec">Atención: ${plural(est.pendiente || 0, 'pendiente', 'pendientes')}, ${est.en_proceso || 0} en proceso, ${plural(est.atendido || 0, 'atendido', 'atendidos')}.</p>` +
     `<form id="form-alerta" class="form-alerta"><b>Emitir una alerta</b>
       <label>Sector <select name="zona"><option value="">Toda la ciudad</option>${t.zonas.map((z) => `<option value="${esc(z.id)}">${esc(z.nombre)}</option>`).join('')}</select></label>

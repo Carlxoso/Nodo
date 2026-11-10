@@ -12,7 +12,7 @@ const { migrar, verificarCruzada, verificarTodos } = require('./verificacion');
 const { cargarEscenario } = require('./escenario');
 const { construirTablero } = require('./tablero');
 const { construirInforme } = require('./informe');
-const { UNIDADES, ESTADOS_ASIG, MAX_ACTIVAS, migrarUnidades, migrarBomberos, migrarLugares, activas, limpiarNombre } = require('./unidades');
+const { UNIDADES, ESTADOS_ASIG, MAX_ACTIVAS, migrarUnidades, migrarBomberos, migrarLugares, migrarServicios, activas, limpiarNombre } = require('./unidades');
 
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 16) {
   console.error('Falta JWT_SECRET en .env (mínimo 16 caracteres). Cópialo de .env.example.');
@@ -377,6 +377,37 @@ app.delete('/api/albergues/:id', soloOperador, async (req, res) => {
   } catch (e) { console.error(e); res.status(500).json({ error: 'error interno' }); }
 });
 
+// ---- Lugares: bomberos, hospitales, UPC y lugares personalizados ----
+const TIPOS_SERVICIO = ['bomberos', 'salud', 'upc', 'agua', 'otro'];
+app.post('/api/servicios', soloOperador, async (req, res) => {
+  const { tipo, nombre, coordenadas } = req.body || {};
+  if (!TIPOS_SERVICIO.includes(tipo)) return res.status(400).json({ error: 'tipo de lugar inválido' });
+  const nom = nombreValido(nombre);
+  if (!nom) return res.status(400).json({ error: 'escribe un nombre (máx. 80 caracteres)' });
+  const c = validarCoords(coordenadas, 1, 1);
+  if (!c) return res.status(400).json({ error: 'ubicación inválida' });
+  try {
+    const { rows } = await pool.query(
+      "INSERT INTO servicios_esenciales (tipo, nombre, geom) VALUES ($1, $2, ST_SetSRID(ST_MakePoint($3, $4), 4326)) RETURNING id",
+      [tipo, nom, c[0][0], c[0][1]]);
+    await auditar(pool, req.usuario.id, `crear:${tipo}`, 'servicio', rows[0].id);
+    publicar({ tipo: 'servicio', id: rows[0].id });
+    res.status(201).json({ id: rows[0].id });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'error interno' }); }
+});
+
+app.delete('/api/servicios/:id', soloOperador, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'id inválido' });
+  try {
+    const { rows } = await pool.query('DELETE FROM servicios_esenciales WHERE id = $1 RETURNING id', [id]);
+    if (!rows.length) return res.status(404).json({ error: 'no encontrado' });
+    await auditar(pool, req.usuario.id, 'eliminar', 'servicio', id);
+    publicar({ tipo: 'servicio', id });
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'error interno' }); }
+});
+
 app.patch('/api/albergues/:id/ocupacion', soloOperador, async (req, res) => {
   const id = Number(req.params.id);
   const n = req.body && req.body.ocupacion;
@@ -585,6 +616,7 @@ iniciarBD(pool)
   .then(() => migrar())
   .then(() => migrarUsuarios(pool))
   .then(() => migrarUnidades(pool))
+  .then(() => migrarServicios(pool))
   .then(() => migrarBomberos(pool))
   .then(() => migrarLugares(pool))
   .then(() => verificarTodos())

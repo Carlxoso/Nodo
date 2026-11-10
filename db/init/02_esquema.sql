@@ -39,7 +39,7 @@ CREATE TABLE albergues (
 
 CREATE TABLE servicios_esenciales (
   id     SERIAL PRIMARY KEY,
-  tipo   TEXT NOT NULL CHECK (tipo IN ('salud','agua','bomberos')),
+  tipo   TEXT NOT NULL CHECK (tipo IN ('salud','agua','bomberos','upc','otro')),
   nombre TEXT NOT NULL,
   geom   geometry(Point,4326) NOT NULL
 );

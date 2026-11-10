@@ -424,3 +424,38 @@ details.det .verif-fila { font-size: 12px; margin-top: 3px; }
 .divisor:focus-visible { outline: none; }
 body.redimensionando { cursor: col-resize; user-select: none; }
 body.redimensionando #mapa { pointer-events: none; }
+
+/* Menú «Lugares» de la barra de herramientas del mapa */
+.lugares-wrap { position: relative; }
+.herramientas #btn-lugares { width: 100%; }
+.herramientas #btn-lugares > .ic:last-child { width: 14px; height: 14px; margin-left: auto; transition: transform .18s; }
+.herramientas #btn-lugares[aria-expanded="true"] > .ic:last-child { transform: rotate(180deg); }
+.lugares-menu { position: absolute; left: calc(100% + 8px); top: 0; display: flex; flex-direction: column; gap: 2px; min-width: 170px; padding: 6px; background: var(--superficie); border: 1px solid var(--linea); border-radius: 12px; box-shadow: 0 8px 24px rgba(20,38,58,.28); animation: menu-lugares .16s ease both; }
+@keyframes menu-lugares { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
+.herramientas .lugares-menu button { border: 0; box-shadow: none; background: transparent; width: 100%; justify-content: flex-start; padding: 8px 10px; border-radius: 8px; font-weight: 600; }
+.herramientas .lugares-menu button:hover, .herramientas .lugares-menu button:focus-visible { background: var(--marea-claro); outline: none; }
+.lugares-menu .ic { color: var(--marea); }
+
+/* Marcadores de lugares por tipo */
+.svc-upc { width: 30px; height: 30px; border-radius: 9px; background: #1E4FA3; color: #fff; border: 2px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,.4); }
+.svc-upc .ic { width: 17px; height: 17px; color: #fff; }
+.svc-otro { width: 30px; height: 30px; border-radius: 9px; background: #55677A; color: #fff; border: 2px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,.4); }
+.svc-otro .ic { width: 17px; height: 17px; color: #fff; }
+.svc-salud, .svc-agua { width: 30px; height: 30px; border-radius: 9px; border-width: 2px; box-shadow: 0 2px 8px rgba(0,0,0,.35); }
+.svc-salud .ic, .svc-agua .ic { width: 17px; height: 17px; }
+
+/* Información al pasar el cursor por zonas, vías y avisos */
+.leaflet-tooltip.tt-nodo { padding: 0; border: 0; background: transparent; box-shadow: none; }
+.leaflet-tooltip.tt-nodo::before { display: none; }
+.tt { display: flex; gap: 10px; align-items: flex-start; background: #fff; border: 1px solid var(--linea); border-left: 4px solid var(--c, #B7791F); border-radius: 10px; padding: 8px 12px 8px 10px; box-shadow: 0 6px 18px rgba(20,38,58,.28); font: 400 13px/1.35 var(--fuente); color: var(--tinta); white-space: normal; width: max-content; max-width: 270px; }
+.tt b { display: block; font-size: 14px; font-weight: 600; }
+.tt small { display: block; color: var(--tinta-2); font-size: 12.5px; }
+.tt .tt-ico { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: color-mix(in srgb, var(--c) 16%, #fff); color: var(--c); }
+.tt .tt-ico .ic { width: 16px; height: 16px; }
+
+/* Aviso de desvío en la ruta */
+.ruta-chip { flex-wrap: wrap; }
+.ruta-aviso { flex-basis: 100%; display: flex; align-items: flex-start; gap: 6px; font-size: 12.5px; color: #8A5A00; }
+.ruta-aviso .ic { width: 14px; height: 14px; flex: none; margin-top: 1px; color: #E09A00; }
+.ruta-aviso.mal { color: #B42318; }
+.ruta-aviso.mal .ic { color: #B42318; }

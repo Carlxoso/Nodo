@@ -76,4 +76,16 @@ async function migrarLugares(pool) {
   }
 }
 
-module.exports = { UNIDADES, ESTADOS_ASIG, MAX_ACTIVAS, migrarUnidades, migrarBomberos, migrarLugares, activas, limpiarNombre };
+// Amplía los tipos de lugar permitidos (UPC y personalizados) en bases creadas antes de este cambio. Idempotente.
+async function migrarServicios(pool) {
+  await pool.query(`DO $$ DECLARE c text; BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'servicios_esenciales'::regclass AND contype = 'c' AND pg_get_constraintdef(oid) LIKE '%upc%') THEN
+      FOR c IN SELECT conname FROM pg_constraint WHERE conrelid = 'servicios_esenciales'::regclass AND contype = 'c' LOOP
+        EXECUTE format('ALTER TABLE servicios_esenciales DROP CONSTRAINT %I', c);
+      END LOOP;
+      ALTER TABLE servicios_esenciales ADD CONSTRAINT servicios_esenciales_tipo_check CHECK (tipo IN ('salud','agua','bomberos','upc','otro'));
+    END IF;
+  END $$;`);
+}
+
+module.exports = { UNIDADES, ESTADOS_ASIG, MAX_ACTIVAS, migrarUnidades, migrarBomberos, migrarLugares, migrarServicios, activas, limpiarNombre };
