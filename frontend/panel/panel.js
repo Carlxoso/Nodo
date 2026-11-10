@@ -279,7 +279,7 @@ function pintarCapas(zonas, vias, albergues, servicios, incidentes) {
     },
     onEachFeature: (f, l) => {
       const p = f.properties, pct = Math.round((p.ocupacion / p.capacidad) * 100);
-      l.bindPopup(`<b>${esc(p.nombre)}</b><br>Ocupación: ${esc(p.ocupacion)} de ${esc(p.capacidad)} (${pct} %)${pct >= 90 ? '<br><b>Cerca del límite de capacidad</b>' : ''}<br>Servicios: ${esc((p.servicios || []).join(', '))}`);
+      l.bindPopup(`<div class="pop"><b>${esc(p.nombre)}</b><br>Ocupación: ${esc(p.ocupacion)} de ${esc(p.capacidad)} (${pct} %)${pct >= 90 ? '<br><b>Cerca del límite de capacidad</b>' : ''}<br>${(p.servicios || []).length ? `<br>Servicios: ${esc(p.servicios.join(', '))}` : ''}<div class="acciones"><button class="peligro" data-del-alb="${esc(p.id)}">${ico('eliminar')}<span class="t">Eliminar albergue</span></button></div></div>`);
     },
   }).addTo(capas.albergues);
 
@@ -437,6 +437,7 @@ function enlazarPopup(popup) {
   el.querySelectorAll('button[data-estado]').forEach((b) => { b.onclick = () => cambiarEstado(b.dataset.id, b.dataset.estado); });
   el.querySelectorAll('button[data-eliminar]').forEach((b) => { b.onclick = () => pedirEliminar(b, () => eliminarCaso(b.dataset.eliminar)); });
   el.querySelectorAll('button[data-del-zona]').forEach((b) => { b.onclick = () => pedirEliminar(b, () => borrar(`/api/zonas/${b.dataset.delZona}`, 'la zona')); });
+  el.querySelectorAll('button[data-del-alb]').forEach((b) => { b.onclick = () => pedirEliminar(b, () => borrar(`/api/albergues/${b.dataset.delAlb}`, 'el albergue')); });
   el.querySelectorAll('button[data-del-via]').forEach((b) => { b.onclick = () => pedirEliminar(b, () => borrar(`/api/vias/${b.dataset.delVia}`, 'la vía')); });
   el.querySelectorAll('button[data-ajustar-via]').forEach((b) => { b.onclick = () => ajustarVia(b.dataset.ajustarVia, b); });
   el.querySelectorAll('button[data-via-estado]').forEach((b) => { b.onclick = () => cambiarVia(b.dataset.viaId, b.dataset.viaEstado); });
@@ -632,7 +633,8 @@ const herramientas = L.control({ position: 'topleft' });
 herramientas.onAdd = () => {
   const d = L.DomUtil.create('div', 'herramientas');
   d.innerHTML = `<button type="button" data-modo="zona" title="Dibujar una zona de riesgo" aria-label="Dibujar una zona de riesgo">${ico('zona')}<span>Zona</span></button>
-    <button type="button" data-modo="via" title="Dibujar una vía por las calles" aria-label="Dibujar una vía por las calles">${ico('ruta')}<span>Vía</span></button>`;
+    <button type="button" data-modo="via" title="Dibujar una vía por las calles" aria-label="Dibujar una vía por las calles">${ico('ruta')}<span>Vía</span></button>
+    <button type="button" data-modo="albergue" title="Agregar un albergue en el mapa" aria-label="Agregar un albergue en el mapa">${ico('albergue')}<span>Albergue</span></button>`;
   if (L.DomEvent) L.DomEvent.disableClickPropagation(d);
   d.querySelectorAll('button').forEach((b) => { b.onclick = () => (dib.modo === b.dataset.modo ? cancelarDibujo() : iniciarDibujo(b.dataset.modo)); });
   return d;
@@ -652,6 +654,20 @@ function iniciarDibujo(modo) {
   mapaEl.classList.add('dibujando');
   document.querySelectorAll('.herramientas button').forEach((b) => b.classList.toggle('activa', b.dataset.modo === modo));
   const zona = modo === 'zona';
+  if (modo === 'albergue') {
+    editor.innerHTML = `<b>Nuevo albergue</b>
+      <p class="ayuda">Haz clic en el mapa donde está el albergue. Puedes volver a hacer clic para moverlo.</p>
+      <label>Nombre <input id="ed-nombre" maxlength="80" placeholder="Ej.: Escuela Simón Bolívar"></label>
+      <label>Capacidad (personas) <input id="ed-cap" type="number" min="1" max="100000" value="100" inputmode="numeric"></label>
+      <label>Ocupación actual <input id="ed-ocu" type="number" min="0" value="0" inputmode="numeric"></label>
+      <div class="ed-acc"><button type="button" id="ed-guardar" class="btn">Guardar</button><button type="button" id="ed-cancelar" class="btn-sec">Cancelar</button></div>
+      <p id="ed-msg" class="ed-msg" role="status"></p>`;
+    editor.hidden = false;
+    document.getElementById('ed-guardar').onclick = guardarDibujo;
+    document.getElementById('ed-cancelar').onclick = cancelarDibujo;
+    document.getElementById('ed-nombre').onkeydown = (e) => { if (e.key === 'Enter') guardarDibujo(); };
+    return refrescarDibujo();
+  }
   editor.innerHTML = `<b>${zona ? 'Nueva zona de riesgo' : 'Nueva vía'}</b>
     <p class="ayuda">${zona ? 'Haz clic en el mapa para marcar las esquinas de la zona (mínimo 3).' : 'Haz clic en el punto de inicio y luego en los siguientes. El trazado sigue las calles.'}</p>
     <label>Nombre <input id="ed-nombre" maxlength="80" placeholder="${zona ? 'Ej.: Sector la ribera' : 'Ej.: Av. principal'}"></label>
@@ -680,6 +696,13 @@ function cancelarDibujo() {
 
 function refrescarDibujo() {
   if (!dib.modo) return;
+  if (dib.modo === 'albergue') {
+    dib.marcas.clearLayers();
+    dib.puntos.forEach((p) => L.circleMarker(p, { radius: 9, color: '#fff', weight: 3, fillColor: '#2F7D5B', fillOpacity: 1, interactive: false }).addTo(dib.marcas));
+    document.getElementById('ed-guardar').disabled = dib.puntos.length < 1;
+    document.getElementById('ed-msg').textContent = dib.puntos.length ? '' : 'Marca la ubicación en el mapa.';
+    return;
+  }
   const zona = dib.modo === 'zona', tipo = document.getElementById('ed-tipo').value;
   dib.marcas.clearLayers();
   if (dib.vista) { mapa.removeLayer(dib.vista); dib.vista = null; }
@@ -704,6 +727,7 @@ function deshacerPunto() {
 
 mapa.on('click', async (e) => {
   if (!dib.modo) return;
+  if (dib.modo === 'albergue') { dib.puntos = [e.latlng]; return refrescarDibujo(); }
   dib.puntos.push(e.latlng);
   if (dib.modo === 'zona' || dib.puntos.length < 2) { dib.tramos.push(null); return refrescarDibujo(); }
   const sesion = dib.sesion, i = dib.puntos.length - 2, a = dib.puntos[i], b = e.latlng;
@@ -720,7 +744,23 @@ mapa.on('click', async (e) => {
 });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && dib.modo) cancelarDibujo(); });
 
+async function guardarAlbergue() {
+  const nombre = document.getElementById('ed-nombre').value.trim(), msg = document.getElementById('ed-msg');
+  const cap = Number(document.getElementById('ed-cap').value), ocu = Number(document.getElementById('ed-ocu').value || 0);
+  if (!nombre) { msg.textContent = 'Escribe un nombre.'; document.getElementById('ed-nombre').focus(); return; }
+  if (!Number.isInteger(cap) || cap < 1) { msg.textContent = 'La capacidad debe ser un número mayor a 0.'; return; }
+  if (!Number.isInteger(ocu) || ocu < 0 || ocu > cap) { msg.textContent = 'La ocupación no puede ser mayor que la capacidad.'; return; }
+  if (!dib.puntos.length) { msg.textContent = 'Marca la ubicación en el mapa.'; return; }
+  const guardar = document.getElementById('ed-guardar');
+  guardar.disabled = true;
+  try {
+    await mandar('/api/albergues', 'POST', { nombre, capacidad: cap, ocupacion: ocu, coordenadas: [[dib.puntos[0].lng, dib.puntos[0].lat]] });
+    cancelarDibujo(); cargar();
+  } catch (e) { guardar.disabled = false; if (e.message !== 'auth') msg.textContent = 'No se pudo guardar: ' + e.message; }
+}
+
 async function guardarDibujo() {
+  if (dib.modo === 'albergue') return guardarAlbergue();
   const zona = dib.modo === 'zona';
   const nombre = document.getElementById('ed-nombre').value.trim(), tipo = document.getElementById('ed-tipo').value, msg = document.getElementById('ed-msg');
   if (!nombre) { msg.textContent = 'Escribe un nombre.'; document.getElementById('ed-nombre').focus(); return; }

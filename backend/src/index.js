@@ -12,7 +12,7 @@ const { migrar, verificarCruzada, verificarTodos } = require('./verificacion');
 const { cargarEscenario } = require('./escenario');
 const { construirTablero } = require('./tablero');
 const { construirInforme } = require('./informe');
-const { UNIDADES, ESTADOS_ASIG, MAX_ACTIVAS, migrarUnidades, migrarBomberos, activas, limpiarNombre } = require('./unidades');
+const { UNIDADES, ESTADOS_ASIG, MAX_ACTIVAS, migrarUnidades, migrarBomberos, migrarLugares, activas, limpiarNombre } = require('./unidades');
 
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 16) {
   console.error('Falta JWT_SECRET en .env (mínimo 16 caracteres). Cópialo de .env.example.');
@@ -344,6 +344,39 @@ app.delete('/api/vias/:id', soloOperador, async (req, res) => {
   } catch (e) { console.error(e); res.status(500).json({ error: 'error interno' }); }
 });
 
+app.post('/api/albergues', soloOperador, async (req, res) => {
+  const { nombre, capacidad, ocupacion, coordenadas } = req.body || {};
+  const nom = nombreValido(nombre);
+  if (!nom) return res.status(400).json({ error: 'escribe un nombre (máx. 80 caracteres)' });
+  const cap = Number(capacidad), ocu = Number(ocupacion ?? 0);
+  if (!Number.isInteger(cap) || cap < 1 || cap > 100000) return res.status(400).json({ error: 'capacidad inválida' });
+  if (!Number.isInteger(ocu) || ocu < 0 || ocu > cap) return res.status(400).json({ error: 'la ocupación no puede superar la capacidad' });
+  const c = validarCoords(coordenadas, 1, 1);
+  if (!c) return res.status(400).json({ error: 'ubicación inválida' });
+  try {
+    const { rows } = await pool.query(
+      "INSERT INTO albergues (nombre, capacidad, ocupacion, fuente, geom) VALUES ($1, $2, $3, 'oficial', ST_SetSRID(ST_MakePoint($4, $5), 4326)) RETURNING id",
+      [nom, cap, ocu, c[0][0], c[0][1]]);
+    await auditar(pool, req.usuario.id, 'crear', 'albergue', rows[0].id);
+    await recalcular(); // un albergue nuevo con cupo cambia las sugerencias
+    publicar({ tipo: 'albergue', id: rows[0].id });
+    res.status(201).json({ id: rows[0].id });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'error interno' }); }
+});
+
+app.delete('/api/albergues/:id', soloOperador, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'id inválido' });
+  try {
+    const { rows } = await pool.query('DELETE FROM albergues WHERE id = $1 RETURNING id', [id]);
+    if (!rows.length) return res.status(404).json({ error: 'no encontrado' });
+    await auditar(pool, req.usuario.id, 'eliminar', 'albergue', id);
+    await recalcular();
+    publicar({ tipo: 'albergue', id });
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'error interno' }); }
+});
+
 app.patch('/api/albergues/:id/ocupacion', soloOperador, async (req, res) => {
   const id = Number(req.params.id);
   const n = req.body && req.body.ocupacion;
@@ -522,7 +555,11 @@ iniciarBD(pool)
   .then(() => migrarUsuarios(pool))
   .then(() => migrarUnidades(pool))
   .then(() => migrarBomberos(pool))
+  .then(() => migrarLugares(pool))
   .then(() => verificarTodos())
   .then(() => recalcular())
   .then((n) => console.log(`Prioridades calculadas: ${n} incidentes`))
-  .catch((e) => console.error('No se pudo calcular prioridades:', e.message));
+  .catch((e) => {
+    const motivo = e.message || (e.errors && e.errors.map((x) => `${x.address}:${x.port} ${x.code}`).join(' | ')) || e.code || String(e);
+    console.error('No se pudo calcular prioridades:', motivo);
+  });

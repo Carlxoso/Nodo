@@ -53,4 +53,27 @@ async function migrarBomberos(pool) {
   }
 }
 
-module.exports = { UNIDADES, ESTADOS_ASIG, MAX_ACTIVAS, migrarUnidades, migrarBomberos, activas, limpiarNombre };
+// Albergues, hospital y planta de agua en sus lugares reales (los mismos del escenario). Idempotente: corrige bases creadas con la semilla genérica.
+const LUGARES = {
+  albergues: [
+    ['Albergue Unidad Educativa A (simulado)', 'Albergue Unidad Educativa Margarita Cortés (simulado)', -79.6507, 0.95885],
+    ['Albergue Coliseo B (simulado)', 'Albergue Unidad Educativa Don Bosco (simulado)', -79.65803, 0.96966],
+    ['Albergue Iglesia C (simulado)', 'Albergue Iglesia María Auxiliadora (simulado)', -79.6847, 0.9137],
+  ],
+  servicios: [
+    ['salud', 'Hospital del Sur Delfina Torres de Concha (simulado)', -79.6916251, 0.9143844],
+    ['agua', 'Planta de agua (simulada)', -79.6455, 0.9625],
+  ],
+};
+async function migrarLugares(pool) {
+  for (const [viejo, nombre, lon, lat] of LUGARES.albergues) {
+    await pool.query(`UPDATE albergues SET geom = ST_SetSRID(ST_MakePoint($3, $4), 4326), nombre = $2
+                      WHERE nombre = $1 OR nombre = $2`, [viejo, nombre, lon, lat]);
+  }
+  for (const [tipo, nombre, lon, lat] of LUGARES.servicios) {
+    await pool.query(`UPDATE servicios_esenciales SET geom = ST_SetSRID(ST_MakePoint($3, $4), 4326), nombre = $2
+                      WHERE id = (SELECT MIN(id) FROM servicios_esenciales WHERE tipo = $1)`, [tipo, nombre, lon, lat]);
+  }
+}
+
+module.exports = { UNIDADES, ESTADOS_ASIG, MAX_ACTIVAS, migrarUnidades, migrarBomberos, migrarLugares, activas, limpiarNombre };
