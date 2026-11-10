@@ -83,7 +83,7 @@ async function notificar(titulo, cuerpo, uuid) {
 }
 const CENTRO = { lat: 0.9592, lon: -79.6539 };
 
-let esSOS = false, tipo = null, gravedad = 3, personas = 0, foto = null, pos = null, transitorio = null;
+let esSOS = false, tipo = null, gravedad = 3, personas = 0, foto = null, fotoCap = null, pos = null, transitorio = null;
 
 // Identificador aleatorio de este teléfono (no es personal): permite contar reportes de teléfonos distintos
 function dispositivoId() {
@@ -275,21 +275,15 @@ $('#btn-demo').onclick = () => {
   habilitar();
 };
 
-// ---------- Foto: se redibuja en un canvas, lo que elimina los metadatos EXIF ----------
-$('#foto').addEventListener('change', async (e) => {
-  const f = e.target.files[0];
-  foto = null; $('#preview').hidden = true; $('#foto-texto').textContent = 'Tomar o elegir una foto';
-  if (!f) return;
-  try {
-    const bmp = await createImageBitmap(f, { imageOrientation: 'from-image' });
-    const k = Math.min(1, 960 / Math.max(bmp.width, bmp.height));
-    const c = document.createElement('canvas');
-    c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
-    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
-    foto = c.toDataURL('image/jpeg', 0.7);
-    $('#preview').src = foto; $('#preview').hidden = false; $('#foto-texto').textContent = 'Cambiar foto';
-  } catch { aviso('No se pudo procesar la foto. El reporte se enviará sin ella.'); }
-});
+// ---------- Foto en vivo con prueba de captura (captura.js): sin galería, con sello de hora y lugar ----------
+async function tomarFoto(textoId, previewId, textoBase, asignar) {
+  const r = await window.NodoCaptura.abrir();
+  if (!r) return;
+  asignar(r);
+  $(previewId).src = r.foto; $(previewId).hidden = false; $(textoId).textContent = 'Repetir foto';
+  if (!r.captura || r.captura.metodo !== 'camara_en_vivo') aviso('Esta foto no se pudo verificar en vivo; contará poco para el COE.');
+}
+$('#btn-foto').onclick = () => tomarFoto('#foto-texto', '#preview', 'Tomar foto en vivo', (r) => { foto = r.foto; fotoCap = r.captura; });
 
 // ---------- Enviar (siempre guarda local primero) ----------
 let enviarT = null;
@@ -307,14 +301,14 @@ $('#enviar').onclick = async () => {
     uuid: uuid4(), estado_local: 'pendiente', estado_servidor: null, error: null, creado: Date.now(), cuenta: sesion ? sesion.usuario.id : null,
     payload: {
       uuid_cliente: null, tipo, descripcion: desc || null, lat: pos.lat, lon: pos.lon,
-      gravedad, personas_afectadas: personas, sos: esSOS && tipo === 'rescate', reportado_en: new Date().toISOString(), foto, dispositivo: dispositivoId(),
+      gravedad, personas_afectadas: personas, sos: esSOS && tipo === 'rescate', reportado_en: new Date().toISOString(), foto, captura: foto ? fotoCap : null, dispositivo: dispositivoId(),
     },
   };
   r.payload.uuid_cliente = r.uuid;
   await guardar(r);
   // Reinicia el formulario
-  tipo = null; personas = 0; foto = null; gravedad = 3; esSOS = false;
-  $('#personas').value = '0'; $('#descripcion').value = ''; $('#foto').value = ''; $('#preview').hidden = true; $('#foto-texto').textContent = 'Tomar o elegir una foto';
+  tipo = null; personas = 0; foto = null; fotoCap = null; gravedad = 3; esSOS = false;
+  $('#personas').value = '0'; $('#descripcion').value = ''; $('#preview').hidden = true; $('#foto-texto').textContent = 'Tomar foto en vivo';
   pintarBotones(); pintarModoSOS(false);
   $('#exito-txt').textContent = navigator.onLine ? 'Reporte enviado' : 'Guardado en tu teléfono';
   $('#exito').hidden = false;
@@ -337,7 +331,7 @@ const PELIGROS = [
   { v: 'hundimiento', n: 'Hundimiento o hueco', i: 'hundimiento', c: '#6B4FA0', tipo: 'otro' },
   { v: 'otro', n: 'Otro peligro', i: 'alerta', c: 'var(--tinta-2)', tipo: 'otro' },
 ];
-let pgTipo = null, pgGrav = null, pgFoto = null, pgT = null;
+let pgTipo = null, pgGrav = null, pgFoto = null, pgCap = null, pgT = null;
 // Mapa: el ciudadano toca la calle (uno o varios puntos); cada tramo se ajusta a las calles con OSRM, igual que en el panel
 let pgMapa = null, pgPts = [], pgSegs = [], pgCapa = null, pgYo = null;
 const PG_MAX = 12;
@@ -420,17 +414,7 @@ $('#pg-atras').onclick = () => irA('inicio');
 $('#pg-gps').onclick = ubicar;
 $('#pg-demo').onclick = () => $('#btn-demo').click();
 $('#pg-sos').onclick = activarSOS;
-$('#pg-foto').addEventListener('change', async (e) => {
-  const f = e.target.files[0]; pgFoto = null; $('#pg-preview').hidden = true; $('#pg-foto-texto').textContent = 'Agregar una foto (opcional)';
-  if (!f) return;
-  try {
-    const bmp = await createImageBitmap(f, { imageOrientation: 'from-image' });
-    const k = Math.min(1, 960 / Math.max(bmp.width, bmp.height)), c = document.createElement('canvas');
-    c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
-    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
-    pgFoto = c.toDataURL('image/jpeg', 0.7); $('#pg-preview').src = pgFoto; $('#pg-preview').hidden = false; $('#pg-foto-texto').textContent = 'Cambiar foto';
-  } catch { aviso('No se pudo procesar la foto. El aviso se enviará sin ella.'); }
-});
+$('#pg-btn-foto').onclick = () => tomarFoto('#pg-foto-texto', '#pg-preview', 'Tomar foto en vivo (opcional)', (r) => { pgFoto = r.foto; pgCap = r.captura; });
 $('#pg-enviar').onclick = async () => {
   const p = PELIGROS.find((x) => x.v === pgTipo);
   if (!p || !pgGrav || !(pos || pgPts.length)) return;
@@ -439,11 +423,11 @@ $('#pg-enviar').onclick = async () => {
   const nota = $('#pg-nota').value.trim();
   const desc = `Peligro en el camino: ${p.n}. ${pgGrav >= 4 ? 'No se puede pasar.' : 'Se puede pasar con cuidado.'}${nota ? ' ' + nota : ''}${pos && pos.demo && !pgPts.length ? ' [ubicación de prueba]' : ''}`.slice(0, 500);
   const r = { uuid: uuid4(), estado_local: 'pendiente', estado_servidor: null, error: null, creado: Date.now(), cuenta: sesion ? sesion.usuario.id : null, peligro_n: p.n,
-    payload: { uuid_cliente: null, tipo: p.tipo, descripcion: desc, lat: sit.lat, lon: sit.lon, gravedad: pgGrav, personas_afectadas: 0, peligro: true, tramo: sit.tramo, sos: false, reportado_en: new Date().toISOString(), foto: pgFoto, dispositivo: dispositivoId() } };
+    payload: { uuid_cliente: null, tipo: p.tipo, descripcion: desc, lat: sit.lat, lon: sit.lon, gravedad: pgGrav, personas_afectadas: 0, peligro: true, tramo: sit.tramo, sos: false, reportado_en: new Date().toISOString(), foto: pgFoto, captura: pgFoto ? pgCap : null, dispositivo: dispositivoId() } };
   r.payload.uuid_cliente = r.uuid;
   await guardar(r);
-  pgTipo = null; pgGrav = null; pgFoto = null; pgReiniciarMarca();
-  pgElegir('#pg-tipos', 'v', ''); pgElegir('#pg-paso', 'g', ''); $('#pg-nota').value = ''; $('#pg-foto').value = ''; $('#pg-preview').hidden = true; $('#pg-foto-texto').textContent = 'Agregar una foto (opcional)';
+  pgTipo = null; pgGrav = null; pgFoto = null; pgCap = null; pgReiniciarMarca();
+  pgElegir('#pg-tipos', 'v', ''); pgElegir('#pg-paso', 'g', ''); $('#pg-nota').value = ''; $('#pg-preview').hidden = true; $('#pg-foto-texto').textContent = 'Tomar foto en vivo (opcional)';
   $('#exito-txt').textContent = navigator.onLine ? 'Peligro marcado. ¡Gracias!' : 'Guardado en tu teléfono';
   $('#exito').hidden = false;
   await pintarLista(); sincronizar();

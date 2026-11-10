@@ -62,6 +62,17 @@ class Api {
   }
 
   /// Estado de un reporte propio (el UUID es el comprobante).
+  /// Desafío de un solo uso para la captura verificada de la foto (null si no hay conexión).
+  static Future<String?> desafioCaptura() async {
+    try {
+      final r = await http.get(Uri.parse('${Config.baseUrl}/api/captura/desafio')).timeout(const Duration(seconds: 4));
+      if (r.statusCode != 200) return null;
+      return (jsonDecode(r.body) as Map<String, dynamic>)['nonce'] as String?;
+    } catch (_) {
+      return null;
+    }
+  }
+
   static Future<Map<String, dynamic>> estadoReporte(String uuid) async {
     final r = await http.get(Uri.parse('${Config.baseUrl}/api/reportes/$uuid')).timeout(_t);
     if (r.statusCode != 200) throw ApiError('sin estado', r.statusCode);

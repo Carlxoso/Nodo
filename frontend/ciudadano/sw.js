@@ -1,7 +1,7 @@
 // Service Worker de NODO ciudadano: la app abre sin internet.
 // Estrategia: red primero (así los cambios llegan), caché como respaldo. La API nunca se cachea.
-const CACHE = 'nodo-ciudadano-v16';
-const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'recorrido.js', '/vendor/leaflet/leaflet.js', '/vendor/leaflet/leaflet.css', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png',
+const CACHE = 'nodo-ciudadano-v17';
+const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'captura.js', 'recorrido.js', '/vendor/leaflet/leaflet.js', '/vendor/leaflet/leaflet.css', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png',
   '/compartido/base.css', '/compartido/carga.css', '/compartido/carga.js', '/compartido/logo.svg', '/compartido/iconos.svg', '/compartido/iconos-solidos.svg',
   ...['400', '500', '600', '700'].map((w) => `/compartido/fuentes/ibm-plex-sans-latin-${w}-normal.woff2`),
   ...['500', '600', '700'].map((w) => `/compartido/fuentes/ibm-plex-sans-condensed-latin-${w}-normal.woff2`)];

@@ -147,23 +147,35 @@ function desgloseHtml(d) {
   return `<div class="why why-prio"><b>Por qué esta prioridad</b>${filas}${nota}</div>`;
 }
 // Verificación cruzada: etiqueta corta para la lista y explicación completa para el popup
+const MOTIVO_FOTO = {
+  sin_captura_en_vivo: 'no se tomó con la cámara de NODO', no_es_camara_en_vivo: 'no se tomó con la cámara de NODO', desafio_invalido: 'código de verificación inválido',
+  desafio_vencido: 'código de verificación vencido', desafio_reutilizado: 'código de verificación ya usado', hora_fuera_de_ventana: 'la hora de la foto no coincide con el código',
+  sin_gps_en_captura: 'la foto no trae GPS', gps_lejos_del_reporte: 'la foto fue tomada lejos del lugar reportado', gps_impreciso: 'el GPS de la foto era muy impreciso',
+  sin_precision_gps: 'la foto no trae precisión de GPS', imagen_repetida: 'la misma imagen ya se usó en otro reporte', imagen_muy_pequena: 'imagen demasiado pequeña o vacía',
+};
+const PENAL = { imagen_repetida: 'Imagen repetida', gps_lejos_del_reporte: 'Foto lejos del lugar', muchos_reportes_mismo_telefono: 'Muchos reportes del mismo teléfono' };
 function verifChip(p) {
   const d = p.confianza_detalle;
   if (!d) return '';
   const n = d.reportes_cercanos ? d.reportes_cercanos.n : 0;
-  if (d.verificacion === 'verificado') return `<span class="chip verif ok">${ico('ok-circulo')}Verificado, ${n + 1} reportes</span>`;
-  if (d.verificacion === 'corroborado') return `<span class="chip verif corr">${ico('ok')}Corroborado, ${n + 1} reportes</span>`;
-  return `<span class="chip verif pend">${ico('alerta')}Por verificar</span>`;
+  const vivo = d.foto && d.foto.verificada ? ' · foto en vivo' : '';
+  const alerta = d.penalizaciones && d.penalizaciones.length ? `<span class="chip verif pend">${ico('alerta')}Posible falso</span>` : '';
+  if (d.verificacion === 'verificado') return `<span class="chip verif ok">${ico('ok-circulo')}Verificado${vivo || ', ' + (n + 1) + ' reportes'}</span>${alerta}`;
+  if (d.verificacion === 'corroborado') return `<span class="chip verif corr">${ico('ok')}Corroborado${vivo || ', ' + (n + 1) + ' reportes'}</span>${alerta}`;
+  return `<span class="chip verif pend">${ico('alerta')}Por verificar</span>${alerta}`;
 }
 function verificacionHtml(p) {
   const d = p.confianza_detalle;
   if (!d) return '';
-  const rc = d.reportes_cercanos || {};
-  const fila = (txt, val) => `<div class="verif-fila"><span>${txt}</span><span class="num">+${esc(val)}</span></div>`;
+  const rc = d.reportes_cercanos || {}, f = d.foto || {};
+  const fila = (txt, val) => `<div class="verif-fila"><span>${txt}</span><span class="num">${val < 0 ? '' : '+'}${esc(val)}</span></div>`;
+  const fotoTxt = !f.tiene ? 'Sin foto' : f.verificada ? `Foto en vivo verificada${f.distancia_m != null ? ' (a ' + esc(f.distancia_m) + ' m)' : ''}` : 'Foto sin prueba de captura';
+  const motivos = f.tiene && !f.verificada && f.motivos && f.motivos.length ? `<small>Por qué no se verificó: ${f.motivos.map((m) => esc(MOTIVO_FOTO[m] || m)).join('; ')}.</small>` : '';
+  const pen = (d.penalizaciones || []).map((x) => fila(esc(PENAL[x.motivo] || x.motivo), x.valor)).join('');
   return `<div class="why"><b>Cómo se verificó</b>${fila('Reporte ciudadano', d.base)}
-    ${fila(`Otros teléfonos cerca (${esc(rc.n)})`, rc.aporte)}${fila(d.foto && d.foto.tiene ? 'Con foto' : 'Sin foto', d.foto ? d.foto.aporte : 0)}
-    ${d.cuenta && d.cuenta.aporte ? fila('Con cuenta registrada', d.cuenta.aporte) : ''}
-    <small>Cuenta otro reporte del mismo tipo, desde otro teléfono, a menos de ${esc(rc.radio_m)} m y ${esc(rc.ventana_min)} minutos. Es un apoyo, no una prueba.</small></div>`;
+    ${fila(`Otros teléfonos cerca (${esc(rc.n)})`, rc.aporte)}${fila(fotoTxt, f.aporte || 0)}
+    ${d.cuenta && d.cuenta.aporte ? fila('Con cuenta registrada', d.cuenta.aporte) : ''}${pen}${motivos}
+    <small>Estricto: sin foto en vivo ni 2 teléfonos distintos no llega a "verificado". Otros reportes = mismo tipo, otro teléfono, a menos de ${esc(rc.radio_m)} m y ${esc(rc.ventana_min)} min. Es un apoyo, no una prueba absoluta.</small></div>`;
 }
 // ---------- Unidades asignadas a un caso ----------
 const UNIDADES = { bomberos: ['Bomberos', 'bomberos'], ambulancia: ['Ambulancia', 'salud'], rescate: ['Equipo de rescate', 'rescate'], maquinaria: ['Maquinaria vial', 'via-cortada'], achique: ['Bomba de achique', 'agua'], policia: ['Policía', 'upc'] };
@@ -1444,7 +1456,7 @@ function pintarFamilias(d) {
       <div class="fam-cab"><div><b>${esc(f.jefe || '(dato no legible)')}</b><small>${plural(f.integrantes, 'persona', 'personas')}${f.telefono ? ` · <a class="tel" href="tel:${esc(f.telefono.replace(/[^0-9+]/g, ''))}">${esc(f.telefono)}</a>` : ''}</small></div>
         <button type="button" class="fam-del" data-fam-del="${esc(f.id)}" aria-label="Eliminar familia">${ico('eliminar')}<span class="t"></span></button></div>
       ${f.necesidades.length ? `<div class="fam-chips">${f.necesidades.map((n) => `<button type="button" class="${f.atendidas.includes(n) ? 'hecho' : ''}" data-fam-nec="${esc(f.id)}" data-n="${esc(n)}" title="${f.atendidas.includes(n) ? 'Entregado. Toca para marcar pendiente' : 'Pendiente. Toca para marcar entregado'}">${icoNec(n)}${esc(NEC_NOMBRE[n] || n)}</button>`).join('')}</div>` : '<p class="sec">Sin necesidades registradas.</p>'}
-      <label class="alb">Albergue<select data-fam-alb="${esc(f.id)}">${opcionesAlbergue(d.albergues, f.albergue_id, f.integrantes)}</select></label></div>`).join('')
+      <label class="fam-alb">Albergue<select data-fam-alb="${esc(f.id)}">${opcionesAlbergue(d.albergues, f.albergue_id, f.integrantes)}</select></label></div>`).join('')
     : vacio('Aún no hay familias registradas. Usa «Registrar una familia».');
   document.getElementById('fam-dinamico').innerHTML = resumen + lista;
 }

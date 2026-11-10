@@ -2,29 +2,47 @@
 // Un reporte gana confianza cuando OTROS teléfonos reportan lo mismo (mismo tipo) cerca y casi a la vez.
 // Un reporte aislado y sin foto queda "por verificar": se atiende según su gravedad, pero se marca con cautela.
 
-const BASE = 30;          // todo reporte ciudadano parte de 30
-const POR_REPORTE = 25;   // cada reporte independiente cercano suma 25...
-const MAX_REPORTES = 2;   // ...hasta 2 reportes (50 puntos)
-const FOTO = 15;          // adjuntar foto suma 15
+const BASE = 20;          // todo reporte ciudadano parte de 20 (antes 30): sin pruebas NO llega a "verificado"
+const POR_REPORTE = 20;   // cada reporte independiente cercano suma 20...
+const MAX_REPORTES = 2;   // ...hasta 2 reportes (40 puntos)
+const FOTO_VERIFICADA = 40; // foto tomada en vivo, con desafío del servidor y GPS coherente
+const FOTO_SIN_PRUEBA = 5;  // foto adjunta sin prueba de captura (galería, sin GPS, etc.): casi no cuenta
 const CUENTA = 10;        // reportar con una cuenta registrada suma 10 (hay una persona responsable)
+const PEN_IMAGEN_REPETIDA = 40; // la misma foto ya se usó en otro reporte
+const PEN_GPS_LEJOS = 20;       // la foto dice estar lejos del lugar reportado
+const PEN_SPAM = 20;            // el mismo teléfono envía muchos reportes en poco tiempo
 const RADIO_M = 200;      // "cerca": a menos de 200 m
 const VENTANA_S = 30 * 60;// "casi a la vez": dentro de 30 minutos
+const SPAM_N = 4, SPAM_S = 3600;
 
-// Función pura: calcula la confianza y explica de dónde sale
-function calcularConfianza({ otros, foto, cuenta }) {
+// Función pura: calcula la confianza y explica de dónde sale.
+// captura: { nivel: 'verificada' | 'sin_prueba', motivos: [] } o null si no hay foto. Para "verificado" hace falta
+// foto verificada en vivo + otro corroborante, o al menos 2 teléfonos distintos + cuenta; nunca solo con "foto".
+function calcularConfianza({ otros, foto, cuenta, captura, spam }) {
   const contados = Math.min(otros, MAX_REPORTES);
   const aporteReportes = contados * POR_REPORTE;
-  const aporteFoto = foto ? FOTO : 0;
+  const motivos = (captura && captura.motivos) || [];
+  const verificada = !!(foto && captura && captura.nivel === 'verificada');
+  const aporteFoto = !foto ? 0 : verificada ? FOTO_VERIFICADA : FOTO_SIN_PRUEBA;
   const aporteCuenta = cuenta ? CUENTA : 0;
-  const total = Math.min(100, BASE + aporteReportes + aporteFoto + aporteCuenta);
-  const verificacion = total >= 75 ? 'verificado' : total >= 50 ? 'corroborado' : 'por_verificar';
+  const penal = [];
+  if (motivos.includes('imagen_repetida')) penal.push({ motivo: 'imagen_repetida', valor: -PEN_IMAGEN_REPETIDA });
+  if (motivos.includes('gps_lejos_del_reporte')) penal.push({ motivo: 'gps_lejos_del_reporte', valor: -PEN_GPS_LEJOS });
+  if (spam) penal.push({ motivo: 'muchos_reportes_mismo_telefono', valor: -PEN_SPAM });
+  const resta = penal.reduce((a, x) => a + x.valor, 0);
+  const total = Math.max(0, Math.min(100, BASE + aporteReportes + aporteFoto + aporteCuenta + resta));
+  let verificacion = total >= 75 ? 'verificado' : total >= 50 ? 'corroborado' : 'por_verificar';
+  // Regla estricta: "verificado" exige una prueba fuerte (foto en vivo verificada o 2 teléfonos independientes)
+  if (verificacion === 'verificado' && !verificada && contados < 2) verificacion = 'corroborado';
+  if (penal.some((x) => x.motivo === 'imagen_repetida') && verificacion !== 'por_verificar') verificacion = 'por_verificar';
   return {
     confianza: total,
     detalle: {
       base: BASE,
       reportes_cercanos: { n: otros, aporte: aporteReportes, radio_m: RADIO_M, ventana_min: VENTANA_S / 60 },
-      foto: { tiene: !!foto, aporte: aporteFoto },
+      foto: { tiene: !!foto, verificada, aporte: aporteFoto, motivos, distancia_m: captura ? captura.distancia_m ?? null : null, precision_m: captura ? captura.precision_m ?? null : null },
       cuenta: { tiene: !!cuenta, aporte: aporteCuenta },
+      penalizaciones: penal,
       total, verificacion,
     },
   };
@@ -40,7 +58,8 @@ async function migrar() {
     ADD COLUMN IF NOT EXISTS sos BOOLEAN NOT NULL DEFAULT false,
     ADD COLUMN IF NOT EXISTS peligro BOOLEAN NOT NULL DEFAULT false,
     ADD COLUMN IF NOT EXISTS tramo JSONB,
-    ADD COLUMN IF NOT EXISTS recibido_en TIMESTAMPTZ`);
+    ADD COLUMN IF NOT EXISTS recibido_en TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS captura JSONB`);
   // Tipos de siniestro nuevos: si la restricción vieja no los admite, se reemplaza
   await pool().query(`DO $$
     DECLARE c TEXT;
@@ -59,7 +78,7 @@ async function migrar() {
 async function verificarUno(id) {
   const db = pool();
   const propio = (await db.query(
-    `SELECT fuente, foto IS NOT NULL AS foto, usuario_id IS NOT NULL AS cuenta,
+    `SELECT fuente, foto IS NOT NULL AS foto, captura, usuario_id IS NOT NULL AS cuenta, dispositivo::text AS dispositivo,
             COALESCE('u' || usuario_id::text, dispositivo::text, uuid_cliente::text) AS clave
      FROM incidentes WHERE id = $1`, [id])).rows[0];
   if (!propio || propio.fuente !== 'ciudadano') return { vecinos: [] }; // simulados y oficiales no se tocan
@@ -77,7 +96,10 @@ async function verificarUno(id) {
 
   // "Independientes": cuentan los teléfonos distintos; varios reportes del mismo teléfono valen uno
   const otros = new Set(vecinos.map((v) => v.clave).filter((c) => c !== propio.clave)).size;
-  const { confianza, detalle } = calcularConfianza({ otros, foto: propio.foto, cuenta: propio.cuenta });
+  const spam = propio.dispositivo ? Number((await db.query(
+    `SELECT count(*) FROM incidentes WHERE dispositivo = $1::uuid AND fuente = 'ciudadano' AND reportado_en >= (SELECT reportado_en FROM incidentes WHERE id = $2) - ($3 || ' seconds')::interval AND reportado_en <= (SELECT reportado_en FROM incidentes WHERE id = $2)`,
+    [propio.dispositivo, id, String(SPAM_S)])).rows[0].count) >= SPAM_N : false;
+  const { confianza, detalle } = calcularConfianza({ otros, foto: propio.foto, cuenta: propio.cuenta, captura: propio.captura, spam });
   await db.query('UPDATE incidentes SET confianza = $1, confianza_detalle = $2 WHERE id = $3', [confianza, JSON.stringify(detalle), id]);
   return { confianza, detalle, vecinos: vecinos.map((v) => v.id) };
 }

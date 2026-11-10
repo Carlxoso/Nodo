@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import '../almacen.dart';
+import '../api.dart';
 import '../modelos.dart';
 import '../tema.dart';
 import '../ubicacion.dart';
@@ -28,6 +30,7 @@ class _NuevoReporteState extends State<NuevoReporte> {
   final desc = TextEditingController();
   final personasCtl = TextEditingController(text: '0');
   String? foto; // data:image/jpeg;base64,...
+  Map<String, dynamic>? captura; // prueba de captura en vivo
   bool atras = false, enviando = false, exito = false;
 
   @override
@@ -48,27 +51,27 @@ class _NuevoReporteState extends State<NuevoReporte> {
         paso = n;
       });
 
+  /// Foto EN VIVO con prueba de captura: solo cámara (sin galería), con un desafío del servidor y el GPS del momento.
   Future<void> elegirFoto() async {
-    final origen = await showModalBottomSheet<ImageSource>(
-      context: context,
-      builder: (_) => SafeArea(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          ListTile(leading: const Icon(Icons.photo_camera_outlined), title: const Text('Tomar foto'), onTap: () => Navigator.pop(context, ImageSource.camera)),
-          ListTile(leading: const Icon(Icons.photo_library_outlined), title: const Text('Elegir de la galería'), onTap: () => Navigator.pop(context, ImageSource.gallery)),
-        ]),
-      ),
-    );
-    if (origen == null) return;
     try {
-      // Al reducirla y recomprimirla se pierden los metadatos de ubicación y cámara
-      final x = await ImagePicker().pickImage(source: origen, maxWidth: 960, maxHeight: 960, imageQuality: 70);
+      final nonce = await Api.desafioCaptura(); // se pide antes de abrir la cámara
+      final x = await ImagePicker().pickImage(source: ImageSource.camera, maxWidth: 960, maxHeight: 960, imageQuality: 70);
       if (x == null) return;
+      final t = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      Position? pos;
+      try {
+        pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high, timeLimit: const Duration(seconds: 6));
+      } catch (_) {}
       final b = await x.readAsBytes();
       if (b.length < 4 || b[0] != 0xFF || b[1] != 0xD8 || b[2] != 0xFF) {
         _msg('Solo se aceptan fotos JPEG. El reporte se enviará sin ella.');
         return;
       }
-      setState(() => foto = 'data:image/jpeg;base64,${base64Encode(b)}');
+      setState(() {
+        foto = 'data:image/jpeg;base64,${base64Encode(b)}';
+        captura = {'metodo': 'camara_en_vivo', 'nonce': nonce, 't': t, 'lat': pos?.latitude, 'lon': pos?.longitude, 'precision': pos?.accuracy};
+      });
+      if (nonce == null || pos == null) _msg('La foto no se pudo verificar del todo (sin conexión o sin GPS); contará poco para el COE.');
     } catch (_) {
       _msg('No se pudo procesar la foto. El reporte se enviará sin ella.');
     }
@@ -83,7 +86,7 @@ class _NuevoReporteState extends State<NuevoReporte> {
     HapticFeedback.mediumImpact();
     await widget.almacen.crear(
       tipo: tipo!, gravedad: gravedad, personas: personas, descripcion: desc.text,
-      lat: u.lat!, lon: u.lon!, demo: u.demo, sos: esSos, foto: foto,
+      lat: u.lat!, lon: u.lon!, demo: u.demo, sos: esSos, foto: foto, captura: captura,
     );
     if (!mounted) return;
     setState(() => exito = true);
@@ -205,11 +208,11 @@ class _NuevoReporteState extends State<NuevoReporte> {
           OutlinedButton.icon(
             onPressed: elegirFoto,
             icon: const Icon(Icons.photo_camera_outlined),
-            label: Text(foto == null ? 'Tomar o elegir una foto' : 'Cambiar foto'),
+            label: Text(foto == null ? 'Tomar foto en vivo' : 'Repetir foto'),
             style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
           ),
           if (foto != null) Padding(padding: const EdgeInsets.only(top: 10), child: ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.memory(base64Decode(foto!.split(',')[1]), height: 160, fit: BoxFit.cover))),
-          const Padding(padding: EdgeInsets.only(top: 14), child: Text('No pedimos tu nombre ni tu teléfono. La foto se reduce y se recomprime antes de enviarse, lo que elimina sus datos de ubicación y de cámara.', style: TextStyle(color: C.tinta2, fontSize: 14))),
+          const Padding(padding: EdgeInsets.only(top: 14), child: Text('No pedimos tu nombre ni tu teléfono. La foto se toma en el momento, sin galería, y se envía con la hora y el lugar para que el COE confíe en tu reporte.', style: TextStyle(color: C.tinta2, fontSize: 14))),
         ]);
       default:
         return ListenableBuilder(

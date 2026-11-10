@@ -418,3 +418,17 @@ body[data-vista="cuenta"] .alerta { display: none; }
 .sos-aviso .ic { width: 20px; height: 20px; flex: none; margin-top: 1px; }
 .modo-sos .sos-aviso { display: flex; }
 .modo-sos .etapas { display: none; }
+
+/* Cámara en vivo con verificación */
+.cam-ov { position: fixed; inset: 0; z-index: 3000; background: #000; display: flex; flex-direction: column; }
+.cam-ov video { flex: 1; min-height: 0; width: 100%; object-fit: cover; background: #000; }
+.cam-info { position: absolute; top: max(12px, env(safe-area-inset-top)); left: 12px; right: 12px; text-align: center; color: #fff; background: rgba(0,0,0,.6); padding: 8px 12px; border-radius: 10px; font-size: 14px; font-weight: 600; }
+.cam-info.mal { background: rgba(160,70,0,.85); }
+.cam-bar { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px max(20px, env(safe-area-inset-bottom)); background: rgba(0,0,0,.75); }
+.cam-bar > * { flex: 1; }
+.cam-x { background: none; border: 0; color: #fff; font-size: 16px; font-weight: 600; text-align: left; padding: 12px 0; cursor: pointer; }
+.cam-disp { flex: none; width: 74px; height: 74px; border-radius: 50%; border: 5px solid #fff; background: #e8eef3; cursor: pointer; }
+.cam-disp:disabled { opacity: .4; }
+.cam-disp:active { transform: scale(.92); }
+button.boton-foto { background: none; font: inherit; }
+#preview { margin: 10px 0 4px; max-width: 100%; border-radius: 12px; }

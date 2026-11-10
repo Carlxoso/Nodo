@@ -521,7 +521,7 @@ body.redimensionando #mapa { pointer-events: none; }
 .fam-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 6px; }
 .fam-chips button { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px 3px 8px; border: 1.5px solid #E8C77A; border-radius: 99px; background: #FFF0D1; color: #8A5B00; font: 600 12.5px var(--fuente); cursor: pointer; }
 .fam-chips button.hecho { border-color: #B5DCC7; background: #E4F3EB; color: #2F7D5B; text-decoration: line-through; }
-.fam-card label.alb { display: block; font-size: 12.5px; color: var(--tinta-2); }
+.fam-card label.fam-alb { display: block; font-size: 12.5px; color: var(--tinta-2); }
 .fam-priv { margin: 0 0 10px; font-size: 12px; color: var(--tinta-2); display: flex; gap: 6px; align-items: flex-start; }
 .fam-priv .ic { width: 14px; height: 14px; flex: none; margin-top: 1px; }
 .fam-del { flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 4px 6px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--tinta-2); cursor: pointer; font: 600 12px var(--fuente); }

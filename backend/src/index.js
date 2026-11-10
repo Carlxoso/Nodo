@@ -15,6 +15,7 @@ const { construirInforme } = require('./informe');
 const { migrarFamilias, montarFamilias } = require('./familias');
 const { calcularTendencia } = require('./tendencia');
 const despacho = require('./despacho');
+const capturaMod = require('./captura');
 const { UNIDADES, ESTADOS_ASIG, MAX_ACTIVAS, migrarUnidades, migrarBomberos, migrarLugares, migrarServicios, activas, limpiarNombre } = require('./unidades');
 
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 16) {
@@ -637,9 +638,12 @@ app.delete('/api/reportes/:uuid', autenticarOpcional, async (req, res) => {
   res.json({ ok: true });
 });
 
+// Desafío de un solo uso para la captura de foto en vivo (ver captura.js)
+app.get('/api/captura/desafio', (req, res) => res.json(capturaMod.desafio()));
+
 // Crear reporte ciudadano. uuid_cliente evita duplicados cuando la PWA reenvía tras estar offline.
 app.post('/api/incidentes', autenticarOpcional, async (req, res) => {
-  const { uuid_cliente, tipo, descripcion, lat, lon, gravedad, personas_afectadas, reportado_en, foto, dispositivo, sos, peligro, tramo } = req.body || {};
+  const { uuid_cliente, tipo, descripcion, lat, lon, gravedad, personas_afectadas, reportado_en, foto, dispositivo, sos, peligro, tramo, captura } = req.body || {};
 
   if (uuid_cliente && !UUID_RE.test(uuid_cliente)) return res.status(400).json({ error: 'uuid_cliente inválido' });
   if (!TIPOS.includes(tipo)) return res.status(400).json({ error: 'tipo inválido', permitidos: TIPOS });
@@ -689,6 +693,8 @@ app.post('/api/incidentes', autenticarOpcional, async (req, res) => {
     );
     if (rows.length) {
       if (fotoBuf) {
+        const cap = await capturaMod.validar({ captura, lat, lon, fotoBuf, db: pool });
+        await pool.query('UPDATE incidentes SET captura = $1::jsonb WHERE id = $2', [JSON.stringify(cap), rows[0].id]);
         const ruta = `/uploads/${rows[0].uuid_cliente}.jpg`; // el uuid lo validó PostgreSQL: no hay rutas arbitrarias
         fs.writeFileSync(path.join(UPLOADS, `${rows[0].uuid_cliente}.jpg`), fotoBuf);
         await pool.query('UPDATE incidentes SET foto = $1 WHERE id = $2', [ruta, rows[0].id]);

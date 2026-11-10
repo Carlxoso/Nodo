@@ -66,7 +66,7 @@ class Almacen extends ChangeNotifier {
     await _p.setString('reportes', jsonEncode(reportes.map((r) => r.toJson()).toList()));
   }
 
-  Future<Reporte> crear({required String tipo, required int gravedad, required int personas, required String descripcion, required double lat, required double lon, required bool demo, required bool sos, String? foto}) async {
+  Future<Reporte> crear({required String tipo, required int gravedad, required int personas, required String descripcion, required double lat, required double lon, required bool demo, required bool sos, String? foto, Map<String, dynamic>? captura}) async {
     final uuid = const Uuid().v4();
     final desc = (descripcion.trim() + (demo ? ' [ubicación de prueba]' : '')).trim();
     final r = Reporte(
@@ -83,6 +83,7 @@ class Almacen extends ChangeNotifier {
         'personas_afectadas': personas,
         'reportado_en': DateTime.now().toUtc().toIso8601String(),
         'foto': foto,
+        'captura': foto == null ? null : captura,
         'dispositivo': _dispositivoId(),
         'sos': sos && tipo == 'rescate',
       },
