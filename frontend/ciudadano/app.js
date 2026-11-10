@@ -2,7 +2,7 @@
 // con un UUID y se envían solos cuando hay señal. El UUID evita duplicados en el servidor.
 const $ = (s) => document.querySelector(s);
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const SOLIDOS = new Set(['inundacion', 'deslizamiento', 'via-cortada', 'rescate', 'otro', 'albergue', 'salud', 'bomberos', 'agua', 'alerta', 'personas']); // íconos sólidos (Font Awesome); el resto, Lucide
+const SOLIDOS = new Set(['inundacion', 'deslizamiento', 'via-cortada', 'rescate', 'otro', 'albergue', 'salud', 'bomberos', 'agua', 'alerta', 'personas', 'upc']); // íconos sólidos (Font Awesome); el resto, Lucide
 const ico = (nombre) => `<svg class="ic" aria-hidden="true" focusable="false"><use href="/compartido/${SOLIDOS.has(nombre) ? 'iconos-solidos' : 'iconos'}.svg#${nombre}"></use></svg>`;
 
 // Cada tipo tiene su pictograma y su color, como un letrero de seguridad
@@ -22,8 +22,8 @@ const GRAV_COLOR = ['#E8C547', '#E0A030', '#D1571F', '#C03A1E', '#B42318'];
 const ESTADO_TXT = { pendiente: 'Recibido, esperando atención', en_proceso: 'En proceso', atendido: 'Atendido' };
 const ESTADO_ICO = { pendiente: 'ok', en_proceso: 'reloj', atendido: 'ok-circulo' };
 // Seguimiento: qué unidad atiende el reporte y en qué paso va
-const UNIDAD_TXT = { bomberos: 'Bomberos', ambulancia: 'Ambulancia', rescate: 'Equipo de rescate', maquinaria: 'Maquinaria vial', achique: 'Bomba de achique' };
-const UNIDAD_ICO = { bomberos: 'bomberos', ambulancia: 'salud', rescate: 'rescate', maquinaria: 'via-cortada', achique: 'agua' };
+const UNIDAD_TXT = { bomberos: 'Bomberos', ambulancia: 'Ambulancia', rescate: 'Equipo de rescate', maquinaria: 'Maquinaria vial', achique: 'Bomba de achique', policia: 'Policía' };
+const UNIDAD_ICO = { bomberos: 'bomberos', ambulancia: 'salud', rescate: 'rescate', maquinaria: 'via-cortada', achique: 'agua', policia: 'upc' };
 const PASOS = ['Enviado', 'Recibido', 'Ayuda asignada', 'Atendido'];
 function unidadesTxt(us) {
   const n = (u) => UNIDAD_TXT[u.unidad] || 'Unidad';

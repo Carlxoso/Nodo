@@ -41,3 +41,9 @@ Demo Day: martes 10 de noviembre, 14:00 a 17:00. Code Freeze: 13:00.
 - **Módulo 5 · Familias y asistencia humanitaria:** pestaña «Familias» del panel. Se registra la familia (nombre y teléfono se guardan cifrados con AES-256-GCM), sus necesidades y el albergue; al asignar albergue se ocupa cupo solo. Tocar una necesidad la marca como entregada. El tablero resume cuántas familias hay y qué falta entregar.
 - **Módulo 6 · Análisis predictivo:** primera tarjeta del tablero, «¿Qué sectores van a empeorar?». Es un modelo estadístico de tendencia, no una IA: compara los reportes de la última hora con los de la hora anterior, suma el nivel de la zona y las vías cortadas, y proyecta el riesgo a 6 horas (amortiguado). Cada cifra se puede explicar. El botón «Alertar» deja lista una alerta preventiva para el sector.
 - Para la demo: cargar el escenario «Jueves 06:00» (los reportes quedan recientes y los sectores aparecen subiendo).
+
+## Tercer panel: instituciones de respuesta (`/instituciones/`)
+- Policía, hospitales y bomberos entran con su propia cuenta (roles «Institución · Policía/Hospital/Bomberos», se crean en Usuarios del panel del COE) y declaran cuántas unidades tienen y cuántas están fuera de servicio. Cada institución ve solo sus sedes; operador y admin ven todas.
+- Las unidades en misión se descuentan solas. Al asignar una unidad, el COE ve de qué sede saldría (la más cercana con unidades libres) o por qué saldría de otra; si no queda ninguna libre, el sistema avisa y no despacha.
+- La ruta del caso sale desde la sede que despacha. La tarjeta «¿Con qué unidades contamos?» del tablero resume la disponibilidad de toda la ciudad.
+- Las sedes de policía y el segundo hospital son simulados (coordenadas aproximadas): se pueden mover, borrar o reemplazar con las reales desde «Lugares».

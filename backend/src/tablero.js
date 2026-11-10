@@ -70,7 +70,8 @@ async function construirTablero() {
        ORDER BY s.tipo, ST_Distance(s.geom::geography, i.geom::geography)`, [top[0].id]);
   }
 
-  let tendencia = null, familias = null;
+  let tendencia = null, familias = null, disponibilidad = null;
+  try { disponibilidad = await require('./despacho').resumen(db); } catch (e) { console.error('disponibilidad:', e.message); }
   try { tendencia = await require('./tendencia').calcularTendencia(); } catch (e) { console.error('tendencia:', e.message); }
   try {
     const { resumir } = require('./familias');
@@ -89,7 +90,7 @@ async function construirTablero() {
     albergues, albergue_sugerido: albergueSugerido,
     recursos: recursosSugeridos(abiertos),
     coordinacion: { caso: top[0] || null, servicios: serviciosCercanos, estados },
-    tendencia, familias,
+    tendencia, familias, disponibilidad,
   };
 }
 

@@ -5,6 +5,7 @@ const UNIDADES = {
   rescate:    'Equipo de rescate',
   maquinaria: 'Maquinaria vial',
   achique:    'Bomba de achique',
+  policia:    'Policía',
 };
 const ESTADOS_ASIG = ['en_camino', 'en_sitio', 'liberada'];
 const MAX_ACTIVAS = 6; // unidades activas por caso
@@ -14,7 +15,7 @@ async function migrarUnidades(pool) {
   await pool.query(`CREATE TABLE IF NOT EXISTS asignaciones (
     id           SERIAL PRIMARY KEY,
     incidente_id INT NOT NULL REFERENCES incidentes(id) ON DELETE CASCADE,
-    unidad       TEXT NOT NULL CHECK (unidad IN ('bomberos','ambulancia','rescate','maquinaria','achique')),
+    unidad       TEXT NOT NULL CHECK (unidad IN ('bomberos','ambulancia','rescate','maquinaria','achique','policia')),
     nombre       TEXT,
     estado       TEXT NOT NULL DEFAULT 'en_camino' CHECK (estado IN ('en_camino','en_sitio','liberada')),
     usuario_id   INT REFERENCES usuarios(id),
@@ -28,8 +29,10 @@ async function migrarUnidades(pool) {
 // Unidades activas (no liberadas) de un caso, para mostrarlas en el panel
 async function activas(pool, incidenteId) {
   const { rows } = await pool.query(
-    `SELECT id, unidad, nombre, estado, asignada_en, llegada_en FROM asignaciones
-     WHERE incidente_id = $1 AND estado <> 'liberada' ORDER BY id`, [incidenteId]);
+    `SELECT a.id, a.unidad, a.nombre, a.estado, a.asignada_en, a.llegada_en,
+            (SELECT json_build_object('id', s.id, 'nombre', s.nombre, 'tipo', s.tipo, 'lat', ST_Y(s.geom), 'lon', ST_X(s.geom))
+               FROM servicios_esenciales s WHERE s.id = a.sede_id) AS sede
+     FROM asignaciones a WHERE a.incidente_id = $1 AND a.estado <> 'liberada' ORDER BY a.id`, [incidenteId]);
   return rows;
 }
 

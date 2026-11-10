@@ -5,7 +5,7 @@ const { promisify } = require('util');
 const scrypt = promisify(crypto.scrypt);
 const { limitar } = require('./seguridad');
 
-const ROLES = ['ciudadano', 'operador', 'admin'];
+const ROLES = ['ciudadano', 'operador', 'admin', 'inst_policia', 'inst_salud', 'inst_bomberos']; // las tres últimas son cuentas de instituciones de respuesta
 const TTL_SEG = 8 * 3600;               // operador y admin: el token dura 8 horas
 const TTL_CIUDADANO = 30 * 24 * 3600;  // ciudadano: 30 días, para no pedir la clave en cada emergencia
 const ttlDe = (rol) => (rol === 'ciudadano' ? TTL_CIUDADANO : TTL_SEG);

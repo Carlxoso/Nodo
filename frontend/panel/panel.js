@@ -166,7 +166,7 @@ function verificacionHtml(p) {
     <small>Cuenta otro reporte del mismo tipo, desde otro teléfono, a menos de ${esc(rc.radio_m)} m y ${esc(rc.ventana_min)} minutos. Es un apoyo, no una prueba.</small></div>`;
 }
 // ---------- Unidades asignadas a un caso ----------
-const UNIDADES = { bomberos: ['Bomberos', 'bomberos'], ambulancia: ['Ambulancia', 'salud'], rescate: ['Equipo de rescate', 'rescate'], maquinaria: ['Maquinaria vial', 'via-cortada'], achique: ['Bomba de achique', 'agua'] };
+const UNIDADES = { bomberos: ['Bomberos', 'bomberos'], ambulancia: ['Ambulancia', 'salud'], rescate: ['Equipo de rescate', 'rescate'], maquinaria: ['Maquinaria vial', 'via-cortada'], achique: ['Bomba de achique', 'agua'], policia: ['Policía', 'upc'] };
 const UNIDAD_SUGERIDA = { rescate: 'rescate', inundacion: 'achique', deslizamiento: 'maquinaria', via_cortada: 'maquinaria', otro: 'ambulancia', terremoto: 'rescate', tsunami: 'rescate', incendio: 'bomberos', derrumbe: 'maquinaria' };
 const ASIG_ESTADO = { en_camino: 'En camino', en_sitio: 'En el sitio' };
 const unidadNombre = (a) => (UNIDADES[a.unidad] ? UNIDADES[a.unidad][0] : a.unidad) + (a.nombre ? ` ${a.nombre}` : '');
@@ -184,8 +184,25 @@ function unidadesHtml(p) {
   const form = p.estado === 'atendido' ? '<small>Caso atendido. Reábrelo para asignar unidades.</small>' : `<div class="u-form">
     <select data-u-tipo aria-label="Tipo de unidad">${Object.entries(UNIDADES).map(([k, v]) => `<option value="${k}"${k === sug ? ' selected' : ''}>${esc(v[0])}</option>`).join('')}</select>
     <input data-u-nombre maxlength="40" placeholder="Nombre (opcional)" aria-label="Nombre de la unidad">
-    <button class="u-asignar" data-asignar="${esc(p.id)}">Asignar</button></div>`;
-  return `<div class="unidades"><b>Unidades asignadas</b>${filas || '<small class="u-vacio">Ninguna todavía.</small>'}${form}</div>`;
+    <button class="u-asignar" data-asignar="${esc(p.id)}">Asignar</button>
+    <div class="u-prev" data-u-prev aria-live="polite"></div></div>`;
+  const ok = p._despacho ? `<div class="u-prev ok">${ico('ok-circulo')}<span>${esc(p._despacho)}</span></div>` : '';
+  return `<div class="unidades"><b>Unidades asignadas</b>${filas || '<small class="u-vacio">Ninguna todavía.</small>'}${ok}${form}</div>`;
+}
+// Antes de asignar: de qué sede saldría la unidad (la más cercana con unidades libres) o por qué saldría de otra
+async function previoDespacho(f) {
+  const prev = f.querySelector('[data-u-prev]'), btn = f.querySelector('[data-asignar]'), unidad = f.querySelector('[data-u-tipo]').value;
+  const marca = (f._m = (f._m || 0) + 1);
+  prev.className = 'u-prev'; prev.textContent = 'Buscando la sede más cercana…';
+  try {
+    const d = await pedir(`/api/incidentes/${btn.dataset.asignar}/despacho?unidad=${encodeURIComponent(unidad)}`);
+    if (marca !== f._m) return;
+    if (d.sin_sede) { prev.textContent = 'Esta unidad no depende de una sede.'; return; }
+    if (!d.elegida) { prev.className = 'u-prev mal'; prev.innerHTML = `${ico('alerta')}<span>No hay unidades libres en ninguna sede. Pide apoyo a la institución o libera una unidad.</span>`; return; }
+    const c = d.candidatas[0], e = d.elegida;
+    if (d.desde_otra_sede) { prev.className = 'u-prev otra'; prev.innerHTML = `${ico('alerta')}<span><b>${esc(c.nombre)}</b> no tiene unidades libres. Saldrá de <b>${esc(e.nombre)}</b> (${metros(e.distancia_m)}, ${plural(e.disponibles, 'libre', 'libres')}).</span>`; }
+    else { prev.innerHTML = `${ico('ok-circulo')}<span>Saldrá de <b>${esc(e.nombre)}</b> (${metros(e.distancia_m)}, ${plural(e.disponibles, 'libre', 'libres')}).</span>`; }
+  } catch (err) { if (marca === f._m) prev.textContent = ''; }
 }
 const recibidoCaso = (p) => !!(p.recibido_en || p.estado !== 'pendiente' || (p.asignaciones || []).length);
 function accionesHtml(p) {
@@ -469,6 +486,7 @@ function enlazarPopup(popup) {
   el.querySelectorAll('button[data-del-via]').forEach((b) => { b.onclick = () => pedirEliminar(b, () => borrar(`/api/vias/${b.dataset.delVia}`, 'la vía')); });
   el.querySelectorAll('button[data-ajustar-via]').forEach((b) => { b.onclick = () => ajustarVia(b.dataset.ajustarVia, b); });
   el.querySelectorAll('button[data-via-estado]').forEach((b) => { b.onclick = () => cambiarVia(b.dataset.viaId, b.dataset.viaEstado); });
+  el.querySelectorAll('.u-form').forEach((f) => { const s = f.querySelector('[data-u-tipo]'); if (s) { s.onchange = () => previoDespacho(f); previoDespacho(f); } });
   el.querySelectorAll('button[data-asignar]').forEach((b) => { b.onclick = () => {
     const f = b.closest('.u-form'), nombre = f.querySelector('[data-u-nombre]').value.trim();
     accionUnidad(popup, b, `/api/incidentes/${b.dataset.asignar}/asignaciones`, 'POST', { unidad: f.querySelector('[data-u-tipo]').value, ...(nombre ? { nombre } : {}) });
@@ -485,9 +503,14 @@ async function accionUnidad(popup, btn, url, metodo, cuerpo) {
     const p = popup._source && popup._source.caso;
     if (p) {
       p.asignaciones = d.asignaciones || []; if (d.estado) p.estado = d.estado;
+      if (metodo === 'POST') p._despacho = d.sede ? `Despachada desde ${d.sede.nombre} (${metros(d.sede.distancia_m)})${d.desde_otra_sede && d.mas_cercana ? `. ${d.mas_cercana.nombre}, la más cercana, no tenía unidades libres.` : '.'}` : null;
       popup.setContent(popupIncidente(p)); enlazarPopup(popup);
-      // Al asignar una unidad la ruta queda fijada y cambia de color para mostrar que el caso está en curso
-      if (metodo === 'POST' && rutaTemp && rutaTemp.casoId === String(p.id)) fijarRuta();
+      // Al asignar una unidad la ruta se recalcula desde la sede que despacha, queda fijada y cambia de color para mostrar que el caso está en curso
+      if (metodo === 'POST') {
+        const m = ultimoPorId[String(p.id)];
+        if (m && p.estado !== 'atendido') { quitarRutaFijada(String(p.id)); await mostrarRuta(m); }
+        if (rutaTemp && rutaTemp.casoId === String(p.id)) fijarRuta();
+      }
       sincronizarRuta(p);
     }
     cargar(); // la lista se actualiza al cerrar el popup
@@ -981,6 +1004,13 @@ function basesCercanas(ll, n) {
     .map((f) => { const [lo, la] = f.geometry.coordinates; return { nombre: f.properties.nombre, lat: la, lon: lo, d: mapa.distance(ll, [la, lo]) }; })
     .sort((a, b) => a.d - b.d).slice(0, n);
 }
+// Si el caso ya tiene una unidad despachada, la ruta sale de esa sede; si no, de las bases de bomberos más cercanas
+function basesDelCaso(p, ll) {
+  const act = ((p && p.asignaciones) || []).find((a) => a.sede && a.estado !== 'liberada');
+  if (act) return [{ nombre: act.sede.nombre, lat: act.sede.lat, lon: act.sede.lon, d: mapa.distance(ll, [act.sede.lat, act.sede.lon]), tipo: act.sede.tipo }];
+  return basesCercanas(ll, 2);
+}
+const ICO_SEDE = { bomberos: 'bomberos', salud: 'salud', upc: 'upc' };
 const tiempoTxt = (seg) => { const m = Math.max(1, Math.round(seg / 60)); return m >= 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m} min`; };
 // Color de la ruta según el estado del caso: azul = sin unidad asignada, naranja = unidad en camino, rojo = unidad en el sitio
 function estiloRuta(p) {
@@ -994,7 +1024,7 @@ function dibujarRuta(pts, base, color) {
   L.polyline(pts, { color: '#0B1F2E', weight: 11, opacity: 0.8, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(g);
   L.polyline(pts, { color: color || '#1A73E8', weight: 6, opacity: 1, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(g);
   L.polyline(pts, { color: '#fff', weight: 2, dashArray: '2 12', lineCap: 'round', className: 'ruta-anim', interactive: false }).addTo(g);
-  L.marker([base.lat, base.lon], { icon: L.divIcon({ className: '', iconSize: [26, 26], iconAnchor: [13, 13], html: `<div class="svc">${ico('bomberos')}</div>` }), interactive: false }).addTo(g);
+  L.marker([base.lat, base.lon], { icon: L.divIcon({ className: '', iconSize: [26, 26], iconAnchor: [13, 13], html: `<div class="svc">${ico(ICO_SEDE[base.tipo] || 'bomberos')}</div>` }), interactive: false }).addTo(g);
   return g;
 }
 async function mostrarRuta(m) {
@@ -1002,7 +1032,7 @@ async function mostrarRuta(m) {
   const id = rutaId, p = m.caso, ll = m.getLatLng();
   if (rutasFijas.has(String(p.id))) return; // ya está fijada y a la vista
   if (p.estado === 'atendido') return;       // un caso atendido ya no tiene ruta en curso
-  const bases = basesCercanas(ll, 2);
+  const bases = basesDelCaso(p, ll);
   if (!bases.length) return;
   rutaChip.hidden = false; rutaChip.textContent = 'Calculando la ruta…';
   try {
@@ -1023,7 +1053,7 @@ function pintarChipRuta() {
   if (!r) return;
   const aviso = r.desvio ? `<small class="ruta-aviso">${ico('alerta')}<span>Desvío: <b>${esc(r.desvio)}</b> está cortada, la ruta la esquiva.</span></small>`
     : r.bloqueada ? `<small class="ruta-aviso mal">${ico('alerta')}<span>Sin desvío posible: <b>${esc(r.bloqueada)}</b> está cortada y la ruta pasa por ahí.</span></small>` : '';
-  rutaChip.innerHTML = `${ico('bomberos')}<span>Desde <b>${esc(r.base.nombre)}</b>: <b>${metros(r.distancia)}</b>, <b>${tiempoTxt(r.duracion)}</b></span>
+  rutaChip.innerHTML = `${ico(ICO_SEDE[r.base.tipo] || 'bomberos')}<span>Desde <b>${esc(r.base.nombre)}</b>: <b>${metros(r.distancia)}</b>, <b>${tiempoTxt(r.duracion)}</b></span>
     <button type="button" data-ruta="fijar">${ico('fijar')}Fijar ruta</button><button type="button" data-ruta="ver">Ver completa</button><button type="button" data-ruta="quitar" aria-label="Quitar la ruta">${ico('cerrar')}</button>${aviso}`;
 }
 // Cuando cambia el conjunto de vías cortadas, las rutas dibujadas (la temporal y las fijadas) se recalculan con el mismo destino
@@ -1036,7 +1066,7 @@ async function recalcularRutas() {
     for (const r of lista) {
       if (!r.destino) continue;
       try {
-        const n = await mejorRuta(basesCercanas(L.latLng(r.destino[1], r.destino[0]), 2), r.destino);
+        const n = await mejorRuta(basesDelCaso((ultimoPorId[r.casoId] || {}).caso, L.latLng(r.destino[1], r.destino[0])), r.destino);
         const vigente = r === rutaTemp || rutasFijas.get(r.casoId) === r;
         if (!vigente) continue;
         mapa.removeLayer(r.grupo);
@@ -1205,6 +1235,21 @@ function tarjetaTendencia(td) {
   return tarjeta('tendencia', '¿Qué sectores van a empeorar?', resumen, cuerpo);
 }
 
+// ---------- Disponibilidad de unidades de las instituciones (tercer panel) ----------
+function tarjetaDisponibilidad(d) {
+  if (!d || !d.length) return '';
+  const libres = d.reduce((n, u) => n + u.disponibles, 0), total = d.reduce((n, u) => n + u.total, 0);
+  const agotadas = d.filter((u) => u.total > 0 && u.disponibles === 0);
+  const resumen = agotadas.length ? `Sin ${esc((UNIDADES[agotadas[0].unidad] || [agotadas[0].unidad])[0].toLowerCase())}` : `${libres} de ${total} libres`;
+  const filas = d.map((u) => {
+    const pct = u.total ? Math.round((u.disponibles / u.total) * 100) : 0, color = u.disponibles === 0 ? '#B42318' : pct <= 34 ? '#B7791F' : '#2F7D5B';
+    return `<div class="alb-fila"><div class="alb-cab"><b>${ico((UNIDADES[u.unidad] || [0, 'otro'])[1])} ${esc((UNIDADES[u.unidad] || [u.unidad])[0])}</b><span class="num">${esc(u.disponibles)} libres de ${esc(u.total)}</span></div>
+      <div class="why-barra"><u style="width:${pct}%;background:${color}"></u></div>
+      <small class="sec">${esc(u.en_mision)} en misión · ${esc(u.fuera)} fuera de servicio · ${plural(u.sedes, 'sede', 'sedes')}</small></div>`;
+  }).join('');
+  return tarjeta('unidades', '¿Con qué unidades contamos?', resumen, filas + `<p class="sec">Cada institución actualiza sus unidades en el <a href="/instituciones/" target="_blank" rel="noopener">panel de instituciones</a>. Si una sede no tiene libres, el sistema despacha desde la siguiente más cercana.</p>`);
+}
+
 // ---------- Módulo 5: resumen de asistencia humanitaria en el tablero ----------
 function tarjetaAsistencia(f) {
   if (!f) return '';
@@ -1285,7 +1330,7 @@ function pintarTablero(t) {
   // Se conservan los textos del formulario de alerta si el tablero se redibuja mientras se escribe
   const f = document.getElementById('form-alerta');
   const previo = f ? { zona: f.zona.value, nivel: f.nivel.value, mensaje: f.mensaje.value } : null;
-  vistaTablero.innerHTML = alertas + tarjetaTendencia(t.tendencia) +
+  vistaTablero.innerHTML = alertas + tarjetaTendencia(t.tendencia) + tarjetaDisponibilidad(t.disponibilidad) +
     tarjeta('pasa', '¿Qué está pasando?', r1, c1) + tarjeta('donde', '¿Dónde?', r2, c2) + tarjeta('personas', '¿Cuántas personas están afectadas?', r3, c3) +
     tarjeta('sectores', '¿Qué sectores priorizar?', r4, c4) + tarjeta('vias', '¿Qué vías están cortadas?', r5, c5) + tarjeta('albergues', '¿Dónde hay albergue?', r6, c6) +
     tarjeta('recursos', '¿Qué se debe movilizar?', r7, c7) + tarjeta('coordinacion', '¿Cómo se coordina?', r8, c8) + tarjetaAsistencia(t.familias);

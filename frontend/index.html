@@ -10,7 +10,7 @@
   <style>
     body { min-height: 100vh; display: grid; place-items: center; padding: 24px 16px;
       background: radial-gradient(1200px 600px at 50% -10%, var(--marea-claro), var(--papel) 70%); }
-    .portada { width: min(880px, 100%); animation: entra .6s ease both; }
+    .portada { width: min(1000px, 100%); animation: entra .6s ease both; }
     @keyframes entra { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
     .marca { display: flex; align-items: center; gap: 14px; justify-content: center; margin-bottom: 8px; }
     .marca img { width: 64px; height: 64px; }
@@ -48,6 +48,12 @@
         <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M7 14l4-4 3 3 5-6"/></svg></span>
         <h2>Panel del COE</h2>
         <p>Mapa de incidentes priorizados, asignación de unidades, albergues y rutas. Acceso para operadores.</p>
+        <span class="ir">Entrar al panel →</span>
+      </a>
+      <a class="acceso" href="/instituciones/">
+        <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 8v6"/><path d="M9 11h6"/></svg></span>
+        <h2>Panel de instituciones</h2>
+        <p>Policía, hospitales y bomberos declaran sus unidades disponibles para que el COE despache desde la sede más cercana.</p>
         <span class="ir">Entrar al panel →</span>
       </a>
     </div>

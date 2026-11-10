@@ -50,6 +50,7 @@ const unidadTxt = {
   'rescate': 'Equipo de rescate',
   'maquinaria': 'Maquinaria vial',
   'achique': 'Bomba de achique',
+  'policia': 'Policía',
 };
 const unidadIcono = {
   'bomberos': Icons.local_fire_department,
@@ -57,6 +58,7 @@ const unidadIcono = {
   'rescate': Icons.sos,
   'maquinaria': Icons.construction,
   'achique': Icons.water_drop,
+  'policia': Icons.local_police,
 };
 
 class Unidad {

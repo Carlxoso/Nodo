@@ -21,7 +21,7 @@ function iniciar(server, { authTimeoutMs = 5000, latidoMs = 30000 } = {}) {
       let m;
       try { m = JSON.parse(datos); } catch { return ws.close(4400, 'mensaje inválido'); }
       const p = m && m.tipo === 'auth' ? verificarToken(m.token) : null;
-      if (!p || !['operador', 'admin'].includes(p.rol)) return ws.close(4403, 'sin permiso');
+      if (!p || !['operador', 'admin', 'inst_policia', 'inst_salud', 'inst_bomberos'].includes(p.rol)) return ws.close(4403, 'sin permiso');
       ws.autenticado = true;
       clearTimeout(espera);
       ws.send(JSON.stringify({ tipo: 'listo' }));

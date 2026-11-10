@@ -5,7 +5,7 @@ try { token = sessionStorage.getItem('nodo_token'); } catch {}
 const $ = (s) => document.querySelector(s);
 const lista = $('#lista');
 let usuarios = [], yo = null, filtro = '';
-const ROL = { admin: 'Administrador', operador: 'Operador', ciudadano: 'Ciudadano' };
+const ROL = { admin: 'Administrador', operador: 'Operador', inst_policia: 'Institución · Policía', inst_salud: 'Institución · Hospital', inst_bomberos: 'Institución · Bomberos', ciudadano: 'Ciudadano' };
 
 async function api(ruta, opciones = {}) {
   const r = await fetch(ruta, { ...opciones, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token } });

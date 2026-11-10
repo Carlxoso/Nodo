@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NODO · Panel de instituciones</title>
+  <meta name="theme-color" content="#0E5C73">
+  <link rel="icon" href="/compartido/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="/compartido/base.css">
+  <link rel="stylesheet" href="instituciones.css">
+</head>
+<body>
+  <header class="barra">
+    <span class="logo"><img src="/compartido/logo.svg" alt="" width="30" height="30">NODO <span class="sub">Instituciones de respuesta</span></span>
+    <p class="aviso">Tus unidades disponibles llegan al COE en tiempo real.</p>
+    <span id="estado" class="chip" role="status">Conectando…</span>
+    <span id="usuario" class="usuario"></span>
+    <button id="salir" class="btn-sec" type="button" hidden>Salir</button>
+  </header>
+
+  <div id="login" class="login" hidden>
+    <form id="form-login" novalidate>
+      <img src="/compartido/logo.svg" alt="" width="56" height="56">
+      <h1>Panel de instituciones</h1>
+      <p class="sec">Ingresa con la cuenta de tu institución (policía, hospital o bomberos).</p>
+      <label>Correo<input type="email" id="l-email" required autocomplete="username" placeholder="institucion@correo.gob.ec"></label>
+      <label>Contraseña<input type="password" id="l-pass" required autocomplete="current-password" placeholder="Tu contraseña"></label>
+      <p id="l-error" class="error" role="alert"></p>
+      <button type="submit" id="l-enviar" class="btn">Entrar</button>
+      <p class="login-pie">Apoyo a la decisión. No reemplaza al COE ni al 911.</p>
+    </form>
+  </div>
+
+  <main id="app" hidden>
+    <section id="lateral">
+      <div id="resumen" class="resumen-u" aria-label="Unidades disponibles en la ciudad"></div>
+      <div id="filtros" class="filtros" role="tablist" aria-label="Filtrar por institución" hidden></div>
+      <div id="sedes"></div>
+    </section>
+    <div id="mapa" aria-label="Mapa de sedes"></div>
+  </main>
+  <script src="/vendor/leaflet/leaflet.js"></script>
+  <script src="instituciones.js"></script>
+</body>
+</html>

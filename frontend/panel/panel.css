@@ -528,3 +528,15 @@ body.redimensionando #mapa { pointer-events: none; }
 .fam-del:hover { background: #FBEAE8; color: var(--p-critica); }
 .fam-del.confirmar, .fam-del.confirmar:hover { background: var(--p-critica); color: #fff; }
 .fam-del .ic { width: 15px; height: 15px; }
+
+/* ---- Despacho desde sedes ---- */
+a.btn-sec { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+.u-prev { display: flex; align-items: flex-start; gap: 6px; width: 100%; margin-top: 6px; font-size: 12.5px; color: var(--tinta-2); line-height: 1.35; }
+.u-prev:empty { display: none; }
+.u-prev .ic { width: 15px; height: 15px; flex: none; margin-top: 1px; color: var(--p-baja); }
+.u-prev.otra { color: #8A5B00; }
+.u-prev.otra .ic { color: #B7791F; }
+.u-prev.mal { color: var(--p-critica); }
+.u-prev.mal .ic { color: var(--p-critica); }
+.u-prev.ok { color: var(--tinta); margin: 4px 0; }
+.u-form .u-prev { grid-column: 1 / -1; }

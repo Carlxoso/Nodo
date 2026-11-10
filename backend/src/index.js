@@ -14,6 +14,7 @@ const { construirTablero } = require('./tablero');
 const { construirInforme } = require('./informe');
 const { migrarFamilias, montarFamilias } = require('./familias');
 const { calcularTendencia } = require('./tendencia');
+const despacho = require('./despacho');
 const { UNIDADES, ESTADOS_ASIG, MAX_ACTIVAS, migrarUnidades, migrarBomberos, migrarLugares, migrarServicios, activas, limpiarNombre } = require('./unidades');
 
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 16) {
@@ -44,7 +45,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 // Unidades activas de cada caso, como arreglo JSON dentro de las propiedades del incidente
 const ASIGNACIONES_SQL = `'asignaciones', COALESCE((SELECT json_agg(json_build_object('id', a.id, 'unidad', a.unidad, 'nombre', a.nombre,
-  'estado', a.estado, 'asignada_en', a.asignada_en, 'llegada_en', a.llegada_en) ORDER BY a.id)
+  'estado', a.estado, 'asignada_en', a.asignada_en, 'llegada_en', a.llegada_en,
+  'sede', (SELECT json_build_object('id', s.id, 'nombre', s.nombre, 'tipo', s.tipo, 'lat', ST_Y(s.geom), 'lon', ST_X(s.geom)) FROM servicios_esenciales s WHERE s.id = a.sede_id)) ORDER BY a.id)
   FROM asignaciones a WHERE a.incidente_id = t.id AND a.estado <> 'liberada'), '[]'::json)`;
 
 // Capas públicas del mapa -> GeoJSON FeatureCollection (todo desde PostGIS)
@@ -149,29 +151,64 @@ app.patch('/api/incidentes/:id/recibido', soloOperador, async (req, res) => {
 });
 
 // ---------- Unidades asignadas a un caso ----------
+// Candidatas para despachar un tipo de unidad: sedes por cercanía, con lo que tiene libre cada una
+app.get('/api/incidentes/:id/despacho', soloOperador, async (req, res) => {
+  const id = Number(req.params.id), unidad = String(req.query.unidad || '');
+  if (!Number.isInteger(id) || !UNIDADES[unidad]) return res.status(400).json({ error: 'datos inválidos' });
+  try {
+    const c = await despacho.candidatas(pool, id, unidad);
+    const elegida = c.find((x) => x.disponibles > 0) || null;
+    res.json({ sin_sede: !despacho.UNIDAD_SEDE[unidad], candidatas: c, elegida, desde_otra_sede: !!elegida && c[0] && elegida.sede_id !== c[0].sede_id });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'error interno' }); }
+});
+
 app.post('/api/incidentes/:id/asignaciones', soloOperador, async (req, res) => {
   const id = Number(req.params.id);
   const { unidad } = req.body || {};
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'id inválido' });
   if (!UNIDADES[unidad]) return res.status(400).json({ error: 'unidad inválida' });
   const nombre = limpiarNombre(req.body.nombre);
+  const sedePedida = req.body.sede_id == null || req.body.sede_id === '' ? null : Number(req.body.sede_id);
+  const cli = await pool.connect();
   try {
-    const caso = (await pool.query('SELECT estado FROM incidentes WHERE id = $1', [id])).rows[0];
+    const caso = (await cli.query('SELECT estado FROM incidentes WHERE id = $1', [id])).rows[0];
     if (!caso) return res.status(404).json({ error: 'no encontrado' });
     if (caso.estado === 'atendido') return res.status(409).json({ error: 'El caso ya está atendido. Reábrelo para asignar una unidad.' });
     if ((await activas(pool, id)).length >= MAX_ACTIVAS) return res.status(409).json({ error: `Máximo ${MAX_ACTIVAS} unidades por caso.` });
-    const a = (await pool.query('INSERT INTO asignaciones (incidente_id, unidad, nombre, usuario_id) VALUES ($1, $2, $3, $4) RETURNING id',
-      [id, unidad, nombre, req.usuario.id])).rows[0];
+
+    // La unidad sale de la sede más cercana con unidades libres; si no hay, de la siguiente (o de la que elija el operador)
+    let sede = null, masCercana = null;
+    await cli.query('BEGIN');
+    if (despacho.UNIDAD_SEDE[unidad]) {
+      const cand = await despacho.candidatas(pool, id, unidad);
+      masCercana = cand[0] || null;
+      const orden = sedePedida ? cand.filter((c) => c.sede_id === sedePedida) : cand;
+      if (sedePedida && !orden.length) { await cli.query('ROLLBACK'); return res.status(400).json({ error: 'esa sede no tiene este tipo de unidad' }); }
+      for (const c of orden) { if (await despacho.reservar(cli, c.sede_id, unidad)) { sede = c; break; } }
+      if (!sede) {
+        await cli.query('ROLLBACK');
+        return res.status(409).json({ error: sedePedida ? 'Esa sede no tiene unidades libres. Elige otra sede.' : `No hay unidades disponibles de «${UNIDADES[unidad]}» en ninguna sede. Pide apoyo a la institución o libera una unidad.`, sin_disponibilidad: true });
+      }
+    }
+    const a = (await cli.query('INSERT INTO asignaciones (incidente_id, unidad, nombre, usuario_id, sede_id) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+      [id, unidad, nombre, req.usuario.id, sede ? sede.sede_id : null])).rows[0];
+    await cli.query('COMMIT');
     // Al salir una unidad el caso deja de estar pendiente
     const est = (await pool.query(`UPDATE incidentes SET estado = 'en_proceso' WHERE id = $1 AND estado = 'pendiente' RETURNING estado`, [id])).rows[0];
     await pool.query('UPDATE incidentes SET recibido_en = COALESCE(recibido_en, now()) WHERE id = $1', [id]); // asignar una unidad también es haberlo recibido
     await auditar(pool, req.usuario.id, `asignar_unidad:${unidad}`, 'incidente', id);
     publicar({ tipo: 'incidente_estado', id, estado: est ? est.estado : caso.estado });
-    res.status(201).json({ id: a.id, estado: est ? est.estado : caso.estado, asignaciones: await activas(pool, id) });
-  } catch (e) { console.error(e); res.status(500).json({ error: 'error interno' }); }
+    if (sede) publicar({ tipo: 'unidades', sede: sede.sede_id });
+    res.status(201).json({
+      id: a.id, estado: est ? est.estado : caso.estado, asignaciones: await activas(pool, id),
+      sede: sede ? { id: sede.sede_id, nombre: sede.nombre, distancia_m: sede.distancia_m } : null,
+      desde_otra_sede: !!(sede && masCercana && masCercana.sede_id !== sede.sede_id),
+      mas_cercana: masCercana ? { nombre: masCercana.nombre, disponibles: masCercana.disponibles } : null,
+    });
+  } catch (e) { await cli.query('ROLLBACK').catch(() => {}); console.error(e); res.status(500).json({ error: 'error interno' }); }
+  finally { cli.release(); }
 });
 
-// Cambia el estado de una unidad: llegó al sitio o quedó libre
 app.patch('/api/asignaciones/:id', soloOperador, async (req, res) => {
   const id = Number(req.params.id);
   const { estado } = req.body || {};
@@ -187,6 +224,7 @@ app.patch('/api/asignaciones/:id', soloOperador, async (req, res) => {
     const inc = rows[0].incidente_id;
     await auditar(pool, req.usuario.id, `unidad_${estado}`, 'incidente', inc);
     publicar({ tipo: 'incidente_estado', id: inc });
+    publicar({ tipo: 'unidades' });
     res.json({ asignaciones: await activas(pool, inc) });
   } catch (e) { console.error(e); res.status(500).json({ error: 'error interno' }); }
 });
@@ -200,6 +238,7 @@ app.delete('/api/asignaciones/:id', soloOperador, async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'no encontrada' });
     await auditar(pool, req.usuario.id, 'cancelar_asignacion', 'incidente', rows[0].incidente_id);
     publicar({ tipo: 'incidente_estado', id: rows[0].incidente_id });
+    publicar({ tipo: 'unidades' });
     res.json({ asignaciones: await activas(pool, rows[0].incidente_id) });
   } catch (e) { console.error(e); res.status(500).json({ error: 'error interno' }); }
 });
@@ -225,6 +264,40 @@ app.get('/api/tendencia', soloOperador, async (_req, res) => {
   try { res.json(await calcularTendencia()); }
   catch (e) { console.error(e); res.status(500).json({ error: 'error interno' }); }
 });
+// Tercer panel: instituciones de respuesta. Cada institución ve y edita solo las sedes de su tipo; operador y admin ven todas.
+const soloInstitucion = requiereRol('operador', 'admin', ...despacho.ROLES_INSTITUCION);
+const tipoDe = (usuario) => despacho.ROL_SEDE[usuario.rol] || null;
+app.get('/api/instituciones', soloInstitucion, async (req, res) => {
+  try {
+    const sedes = await despacho.sedes(pool, { tipo: tipoDe(req.usuario) });
+    res.json({ alcance: tipoDe(req.usuario), sedes, resumen: await despacho.resumen(pool) });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'error interno' }); }
+});
+// Una sede declara cuántas unidades tiene (total) y cuántas están fuera de servicio
+app.patch('/api/sedes/:id/unidades', soloInstitucion, async (req, res) => {
+  const id = Number(req.params.id), { unidad } = req.body || {};
+  const total = req.body.total === undefined ? undefined : Number(req.body.total);
+  const fuera = req.body.fuera === undefined ? undefined : Number(req.body.fuera);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'id inválido' });
+  if (total !== undefined && (!Number.isInteger(total) || total < 0 || total > 99)) return res.status(400).json({ error: 'total inválido (0 a 99)' });
+  if (fuera !== undefined && (!Number.isInteger(fuera) || fuera < 0)) return res.status(400).json({ error: 'fuera de servicio inválido' });
+  if (total === undefined && fuera === undefined) return res.status(400).json({ error: 'nada que cambiar' });
+  try {
+    const sede = (await pool.query('SELECT tipo FROM servicios_esenciales WHERE id = $1', [id])).rows[0];
+    if (!sede) return res.status(404).json({ error: 'sede no encontrada' });
+    const alcance = tipoDe(req.usuario);
+    if (alcance && alcance !== sede.tipo) return res.status(403).json({ error: 'esta sede no es de tu institución' });
+    if (!(despacho.SEDE_UNIDADES[sede.tipo] || []).includes(unidad)) return res.status(400).json({ error: 'unidad no válida para esta sede' });
+    const act = (await pool.query('SELECT total, fuera FROM unidades_sede WHERE sede_id = $1 AND unidad = $2', [id, unidad])).rows[0] || { total: 0, fuera: 0 };
+    const nuevoTotal = total ?? act.total, nuevoFuera = Math.min(fuera ?? act.fuera, nuevoTotal);
+    await pool.query(`INSERT INTO unidades_sede (sede_id, unidad, total, fuera) VALUES ($1, $2, $3, $4)
+      ON CONFLICT (sede_id, unidad) DO UPDATE SET total = EXCLUDED.total, fuera = EXCLUDED.fuera`, [id, unidad, nuevoTotal, nuevoFuera]);
+    await auditar(pool, req.usuario.id, `unidades:${unidad}=${nuevoTotal}/${nuevoFuera}`, 'sede', id);
+    publicar({ tipo: 'unidades', sede: id });
+    res.json({ ok: true, total: nuevoTotal, fuera: nuevoFuera });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'error interno' }); }
+});
+
 // Módulo 5: familias afectadas y asistencia humanitaria (datos personales cifrados)
 montarFamilias(app, { pool, soloOperador, auditar, publicar, recalcular });
 
@@ -415,6 +488,7 @@ app.post('/api/servicios', soloOperador, async (req, res) => {
       "INSERT INTO servicios_esenciales (tipo, nombre, geom) VALUES ($1, $2, ST_SetSRID(ST_MakePoint($3, $4), 4326)) RETURNING id",
       [tipo, nom, c[0][0], c[0][1]]);
     await auditar(pool, req.usuario.id, `crear:${tipo}`, 'servicio', rows[0].id);
+    await despacho.sembrarUnidades(pool); // una sede nueva nace con sus unidades por defecto
     publicar({ tipo: 'servicio', id: rows[0].id });
     res.status(201).json({ id: rows[0].id });
   } catch (e) { console.error(e); res.status(500).json({ error: 'error interno' }); }
@@ -646,6 +720,7 @@ iniciarBD(pool)
   .then(() => migrarBomberos(pool))
   .then(() => migrarLugares(pool))
   .then(() => migrarFamilias(pool))
+  .then(() => despacho.migrarDespacho(pool))
   .then(() => verificarTodos())
   .then(() => recalcular())
   .then((n) => console.log(`Prioridades calculadas: ${n} incidentes`))
