@@ -82,7 +82,7 @@ class Reporte {
   String estadoLocal; // pendiente | enviado | rechazado
   String? estadoServidor, error, verificacion, peligroN;
   int? cuenta; // id de la cuenta con la que se envió (null = anónimo)
-  bool huboUnidad;
+  bool huboUnidad, recibido;
   int desfaseMs;
   final int creado;
   List<Unidad> unidades;
@@ -98,6 +98,7 @@ class Reporte {
     this.peligroN,
     this.cuenta,
     this.huboUnidad = false,
+    this.recibido = false,
     this.desfaseMs = 0,
     List<Unidad>? unidades,
   }) : unidades = unidades ?? [];
@@ -118,6 +119,7 @@ class Reporte {
         peligroN: j['peligro_n'] as String?,
         cuenta: j['cuenta'] as int?,
         huboUnidad: (j['hubo_unidad'] ?? false) as bool,
+        recibido: (j['recibido'] ?? false) as bool,
         desfaseMs: (j['desfase'] ?? 0) as int,
         unidades: ((j['unidades'] ?? []) as List).map((u) => Unidad.fromJson(Map<String, dynamic>.from(u as Map))).toList(),
       );
@@ -133,6 +135,7 @@ class Reporte {
         'peligro_n': peligroN,
         'cuenta': cuenta,
         'hubo_unidad': huboUnidad,
+        'recibido': recibido,
         'desfase': desfaseMs,
         'unidades': unidades.map((u) => u.toJson()).toList(),
       };
@@ -164,24 +167,28 @@ String unidadesTexto(List<Unidad> us) {
 }
 
 class Seguimiento {
-  final int paso;
+  final int hechos; // cuántos pasos están completos (1 a 4)
   final String texto, apoyo;
   final IconData icono;
-  Seguimiento(this.paso, this.texto, this.icono, this.apoyo);
+  Seguimiento(this.hechos, this.texto, this.icono, this.apoyo);
 }
+
+const tituloAvance = {2: 'Tu reporte fue recibido', 3: 'Ayuda asignada', 4: 'Tu reporte fue atendido'};
 
 Seguimiento seguimiento(Reporte r) {
   final enSitio = r.unidades.where((u) => u.estado == 'en_sitio').toList();
   final enCamino = r.unidades.where((u) => u.estado == 'en_camino').toList();
-  var paso = 1;
-  var txt = estadoTxt[r.estadoServidor] ?? (r.estadoServidor ?? 'Enviado');
-  var icono = Icons.check;
+  final asignada = enCamino.isNotEmpty || enSitio.isNotEmpty || r.huboUnidad;
+  final recibido = r.recibido || (r.estadoServidor != null && r.estadoServidor != 'pendiente') || asignada;
+  var hechos = 1;
+  var txt = 'Enviado. Esperando que el centro de operaciones lo reciba';
+  var icono = Icons.send;
   if (r.estadoServidor == 'atendido') {
-    paso = 3;
+    hechos = 4;
     txt = 'Atendido por el centro de operaciones';
     icono = Icons.check_circle_outline;
-  } else if (enCamino.isNotEmpty || enSitio.isNotEmpty || r.huboUnidad) {
-    paso = 2;
+  } else if (asignada) {
+    hechos = 3;
     txt = enCamino.isNotEmpty
         ? '${unidadesTexto(enCamino)} en camino'
         : enSitio.isNotEmpty
@@ -190,10 +197,11 @@ Seguimiento seguimiento(Reporte r) {
     if (enCamino.isNotEmpty && enSitio.isNotEmpty) txt += '. ${unidadesTexto(enSitio)} ya llegó';
     final lista = enCamino.isNotEmpty ? enCamino : enSitio;
     icono = lista.isNotEmpty ? (unidadIcono[lista.first.unidad] ?? Icons.schedule) : Icons.schedule;
-  } else if (r.estadoServidor == 'en_proceso') {
-    txt = 'El centro de operaciones lo está atendiendo';
-    icono = Icons.schedule;
+  } else if (recibido) {
+    hechos = 2;
+    txt = 'Recibido por el centro de operaciones. Estamos organizando la ayuda';
+    icono = Icons.inbox;
   }
   final apoyo = (r.verificacion == 'verificado' || r.verificacion == 'corroborado') ? 'Otras personas cercanas reportaron lo mismo.' : '';
-  return Seguimiento(paso, txt, icono, apoyo);
+  return Seguimiento(hechos, txt, icono, apoyo);
 }

@@ -394,3 +394,20 @@ body[data-vista="cuenta"] .alerta { display: none; }
 .lista li.saliendo { animation: li-sale .26s ease forwards; }
 @keyframes li-sale { to { opacity: 0; transform: translateX(40px); max-height: 0; margin: 0; padding-top: 0; padding-bottom: 0; } }
 .li-del.confirmar { top: auto; bottom: 10px; }
+
+/* Seguimiento por pasos: marca de verificación y animación al cumplirse un paso */
+.pasos li.hecho i::after { content: ""; position: absolute; left: 50%; top: 45%; width: 3px; height: 6px; border: solid #fff; border-width: 0 1.7px 1.7px 0; transform: translate(-50%, -50%) rotate(45deg); }
+.pasos li { transition: color .3s; }
+.pasos li.recien i { animation: paso-marcado .8s cubic-bezier(.2, .9, .3, 1.3) both; }
+.pasos li.recien::before { transform-origin: left center; animation: paso-trazo .6s ease both; }
+.pasos li.recien span { animation: paso-texto .6s ease both; }
+@keyframes paso-marcado { 0% { transform: scale(.3); box-shadow: 0 0 0 0 rgba(14,92,115,.55); } 55% { transform: scale(1.6); } 100% { transform: scale(1); box-shadow: 0 0 0 12px rgba(14,92,115,0); } }
+@keyframes paso-trazo { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes paso-texto { from { opacity: .3; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .pasos li.recien i, .pasos li.recien::before, .pasos li.recien span { animation: none; } }
+
+/* Invitación a activar las notificaciones */
+.notif-aviso { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 12px; padding: 12px 14px; background: var(--marea-claro); border: 1px solid #BBD8E1; border-radius: 12px; font-size: 14px; color: var(--tinta); }
+.notif-aviso[hidden] { display: none; }
+.notif-aviso .ic { width: 20px; height: 20px; color: var(--marea); flex: none; }
+.notif-aviso span { flex: 1 1 200px; }

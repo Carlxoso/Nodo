@@ -201,6 +201,8 @@ class Almacen extends ChangeNotifier {
           creado: DateTime.tryParse((x['creado_en'] ?? '') as String)?.millisecondsSinceEpoch ?? 0,
           estadoLocal: 'enviado',
           estadoServidor: x['estado'] as String?,
+          recibido: x['recibido'] == true,
+          huboUnidad: x['hubo_unidad'] == true,
           cuenta: usuario['id'] as int?,
           payload: {'uuid_cliente': u, 'tipo': x['tipo'], 'descripcion': x['descripcion'], 'lat': (x['lat'] as num).toDouble(), 'lon': (x['lon'] as num).toDouble(), 'gravedad': x['gravedad'] ?? 3, 'personas_afectadas': x['personas_afectadas'] ?? 0, 'sos': x['sos'] == true},
         ));
@@ -262,20 +264,21 @@ class Almacen extends ChangeNotifier {
       for (final r in List<Reporte>.from(reportes)) {
         if (r.estadoLocal != 'enviado' || r.estadoServidor == 'atendido') continue;
         try {
-          final antes = seguimiento(r).texto;
+          final antes = seguimiento(r).hechos;
           final d = await Api.estadoReporte(r.uuid);
           r.estadoServidor = d['estado'] as String?;
           r.unidades = ((d['unidades'] ?? []) as List).map((u) => Unidad.fromJson(Map<String, dynamic>.from(u as Map))).toList();
           r.huboUnidad = d['hubo_unidad'] == true;
+          r.recibido = d['recibido'] == true;
           r.verificacion = d['verificacion'] as String?;
           final ahora = d['ahora'] as String?;
           r.desfaseMs = ahora != null ? (DateTime.tryParse(ahora)?.millisecondsSinceEpoch ?? 0) - DateTime.now().millisecondsSinceEpoch : 0;
           huboRed = true;
           await _guardar();
-          final nuevo = seguimiento(r).texto;
-          if (nuevo != antes) {
+          final sg = seguimiento(r);
+          if (sg.hechos > antes) {
             Sonido.novedad();
-            _novedades.add('Novedad en tu reporte: $nuevo');
+            _novedades.add('${tituloAvance[sg.hechos] ?? 'Novedad en tu reporte'}: ${sg.texto}');
           }
         } catch (_) {
           fallo = true;

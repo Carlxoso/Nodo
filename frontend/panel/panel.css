@@ -459,3 +459,13 @@ body.redimensionando #mapa { pointer-events: none; }
 .ruta-aviso .ic { width: 14px; height: 14px; flex: none; margin-top: 1px; color: #E09A00; }
 .ruta-aviso.mal { color: #B42318; }
 .ruta-aviso.mal .ic { color: #B42318; }
+
+/* Marcar reporte como recibido */
+.recibir { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1.5px solid var(--marea); border-radius: 999px; background: var(--marea); color: #fff; font: 600 12.5px var(--fuente); cursor: pointer; transition: background-color .15s, transform .12s; }
+.recibir:hover { background: var(--marea-osc); }
+.recibir:active { transform: scale(.96); }
+.recibir:disabled { opacity: .6; cursor: default; }
+.recibir .ic { width: 14px; height: 14px; }
+.recibir-fila { padding: 3px 10px; font-size: 12px; }
+.recibido-chip { color: #1E7A4B; border-color: #BFE3CF; background: #EAF6EF; }
+.recibido-chip .ic { width: 13px; height: 13px; color: #1E7A4B; }

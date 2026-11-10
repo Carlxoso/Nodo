@@ -26,24 +26,57 @@ function unidadesTxt(us) {
   const nombres = [...new Set(us.map(n))];
   return nombres.length > 2 ? `${nombres.slice(0, 2).join(', ')} y ${nombres.length - 2} más` : nombres.join(' y ');
 }
-// Titular, ícono y paso actual de un reporte ya enviado, según lo último que informó el servidor
+// Titular, ícono y pasos cumplidos de un reporte ya enviado, según lo último que informó el servidor.
+// Pasos: 1 Enviado (lo hace la persona) · 2 Recibido (lo marca el operador en el panel) · 3 Ayuda asignada (al asignar una unidad) · 4 Atendido.
 function seguimiento(r) {
   const us = r.unidades || [];
   const enSitio = us.filter((u) => u.estado === 'en_sitio'), enCamino = us.filter((u) => u.estado === 'en_camino');
-  let paso = 1, txt = ESTADO_TXT[r.estado_servidor] || r.estado_servidor, icono = ESTADO_ICO[r.estado_servidor] || 'ok';
-  if (r.estado_servidor === 'atendido') { paso = 3; txt = 'Atendido por el centro de operaciones'; icono = 'ok-circulo'; }
-  else if (enCamino.length || enSitio.length || r.hubo_unidad) {
-    paso = 2;
+  const asignada = !!(r.hubo_unidad || us.length), atendido = r.estado_servidor === 'atendido';
+  const recibido = !!(r.recibido || asignada || atendido || (r.estado_servidor && r.estado_servidor !== 'pendiente'));
+  const hechos = atendido ? 4 : asignada ? 3 : recibido ? 2 : 1;
+  let txt, icono;
+  if (atendido) { txt = 'Atendido por el centro de operaciones'; icono = 'ok-circulo'; }
+  else if (asignada) {
     const lista = enCamino.length ? enCamino : enSitio;
     txt = enCamino.length ? `${unidadesTxt(enCamino)} en camino` : enSitio.length ? `${unidadesTxt(enSitio)} en el sitio` : 'Ayuda asignada';
     if (enCamino.length && enSitio.length) txt += `. ${unidadesTxt(enSitio)} ya llegó`;
     icono = lista.length ? (UNIDAD_ICO[lista[0].unidad] || 'reloj') : 'reloj';
-  } else if (r.estado_servidor === 'en_proceso') { txt = 'El centro de operaciones lo está atendiendo'; icono = 'reloj'; }
+  } else if (recibido) { txt = 'Recibido por el centro de operaciones. Estamos organizando la ayuda'; icono = 'reloj'; }
+  else { txt = 'Enviado. Esperando que el centro de operaciones lo reciba'; icono = 'ok'; }
   const apoyo = (r.verificacion === 'verificado' || r.verificacion === 'corroborado') ? 'Otras personas cercanas reportaron lo mismo.' : '';
-  return { paso, txt, icono, apoyo };
+  return { hechos, txt, icono, apoyo };
 }
-const pasosHtml = (paso) => `<ol class="pasos" aria-label="Avance del reporte">${PASOS.map((n, i) =>
-  `<li class="${i < paso ? 'hecho' : i === paso ? (paso === 3 ? 'hecho' : 'actual') : ''}"><i></i><span>${n}</span></li>`).join('')}</ol>`;
+// `desde`: cuántos pasos ya había visto la persona; los nuevos se marcan con una animación
+const pasosHtml = (hechos, desde) => `<ol class="pasos" aria-label="Avance del reporte">${PASOS.map((n, i) =>
+  `<li class="${i < hechos ? 'hecho' + (i >= desde ? ' recien' : '') : i === hechos ? 'actual' : ''}"><i></i><span>${n}</span></li>`).join('')}</ol>`;
+
+// Aviso en cada avance: mensaje en pantalla, vibración, sonido y, si la persona lo permitió, notificación del teléfono
+const TITULO_AVANCE = { 2: 'Tu reporte fue recibido', 3: 'Ayuda asignada', 4: 'Tu reporte fue atendido' };
+const CUERPO_AVANCE = { 2: 'El centro de operaciones ya lo tiene y está organizando la ayuda.', 4: 'El centro de operaciones lo marcó como atendido.' };
+function sonidoAvance() {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+    const c = new AC(), t = c.currentTime;
+    [[660, 0], [880, 0.14]].forEach(([f, d]) => {
+      const o = c.createOscillator(), g = c.createGain(); o.type = 'sine'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t + d); g.gain.exponentialRampToValueAtTime(0.18, t + d + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.3);
+      o.connect(g).connect(c.destination); o.start(t + d); o.stop(t + d + 0.32);
+    });
+    setTimeout(() => c.close().catch(() => {}), 900);
+  } catch {}
+}
+async function notificar(titulo, cuerpo, uuid) {
+  aviso(`${titulo}. ${cuerpo}`);
+  try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch {}
+  sonidoAvance();
+  try {
+    if ('Notification' in window && Notification.permission === 'granted') {
+      const op = { body: cuerpo, icon: 'icon-192.png', badge: 'icon-192.png', tag: 'nodo-' + uuid, renotify: true, data: { url: './#reportes' } };
+      const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration();
+      if (reg) await reg.showNotification(titulo, op); else new Notification(titulo, op);
+    }
+  } catch {}
+}
 const CENTRO = { lat: 0.9592, lon: -79.6539 };
 
 let esSOS = false, tipo = null, gravedad = 3, personas = 0, foto = null, pos = null, transitorio = null;
@@ -455,13 +488,14 @@ async function sincronizar() {
       try {
         const res = await fetch('/api/reportes/' + r.uuid);
         if (res.ok) {
-          const antes = seguimiento(r).txt, d = await res.json();
-          r.estado_servidor = d.estado; r.unidades = d.unidades || []; r.hubo_unidad = !!d.hubo_unidad; r.verificacion = d.verificacion || null;
+          const antes = seguimiento(r), d = await res.json();
+          r.estado_servidor = d.estado; r.unidades = d.unidades || []; r.hubo_unidad = !!d.hubo_unidad; r.recibido = !!d.recibido; r.verificacion = d.verificacion || null;
           r.desfase = d.ahora ? Date.parse(d.ahora) - Date.now() : 0; // reloj del servidor menos el del teléfono
           await guardar(r);
           if (window.recorridoNovedades) recorridoNovedades(r);
-          const ahora = seguimiento(r).txt;
-          if (ahora !== antes) { aviso('Novedad en tu reporte: ' + ahora); try { navigator.vibrate && navigator.vibrate(200); } catch {} }
+          const ahora = seguimiento(r);
+          if (ahora.hechos > antes.hechos) notificar(TITULO_AVANCE[ahora.hechos] || 'Novedad en tu reporte', CUERPO_AVANCE[ahora.hechos] || ahora.txt, r.uuid);
+          else if (ahora.txt !== antes.txt) { aviso('Novedad en tu reporte: ' + ahora.txt); try { navigator.vibrate && navigator.vibrate(200); } catch {} }
         }
       } catch { break; }
     }
@@ -481,7 +515,10 @@ async function pintarLista() {
     let txt, cls, icono, extra = '';
     if (r.estado_local === 'pendiente') { txt = 'Guardado en este teléfono. Se enviará cuando haya internet.'; cls = 'wait'; icono = 'sin-red'; }
     else if (r.estado_local === 'rechazado') { txt = 'No se pudo enviar: ' + r.error; cls = 'mal'; icono = 'alerta'; }
-    else { const sg = seguimiento(r); txt = sg.txt; cls = 'ok'; icono = sg.icono; extra = (sg.apoyo ? `<div class="e apoyo">${esc(sg.apoyo)}</div>` : '') + pasosHtml(sg.paso)
+    else {
+      const sg = seguimiento(r), desde = r.hechosVistos == null ? sg.hechos : r.hechosVistos;
+      if (r.hechosVistos !== sg.hechos) { r.hechosVistos = sg.hechos; guardar(r); } // los pasos nuevos se animan una sola vez
+      txt = sg.txt; cls = 'ok'; icono = sg.icono; extra = (sg.apoyo ? `<div class="e apoyo">${esc(sg.apoyo)}</div>` : '') + pasosHtml(sg.hechos, desde)
       + ((r.unidades || []).length ? `<button type="button" class="btn-sec ver-recorrido" data-uuid="${esc(r.uuid)}">${ico('ruta')}Ver recorrido de la ayuda</button>` : ''); }
     const cuando = new Date(r.creado).toLocaleString('es-EC', { dateStyle: 'short', timeStyle: 'short' });
     const nuevoLi = !primeraLista && !vistos.has(r.uuid); vistos.add(r.uuid);
@@ -490,6 +527,8 @@ async function pintarLista() {
       <button type="button" class="li-del" data-uuid="${esc(r.uuid)}" data-estado="${esc(r.estado_local)}" aria-label="Eliminar este reporte">${ico('eliminar')}<span class="t">Eliminar</span></button></li>`;
   }).join('');
   primeraLista = false;
+  const na = $('#notif-aviso');
+  if (na) na.hidden = !('Notification' in window) || Notification.permission !== 'default' || !items.length;
   const pend = items.filter((r) => r.estado_local === 'pendiente').length;
   document.querySelectorAll('.js-conexion').forEach((b) => {
     b.className = 'chip js-conexion ' + (navigator.onLine ? 'on' : 'off');
@@ -622,7 +661,7 @@ async function traerMisReportes() {
     for (const x of await res.json()) {
       if (locales.has(x.uuid) || quitados.has(x.uuid)) continue; // los que la persona eliminó no vuelven
       await guardar({
-        uuid: x.uuid, estado_local: 'enviado', estado_servidor: x.estado, error: null, creado: Date.parse(x.creado_en), cuenta: sesion.usuario.id,
+        uuid: x.uuid, estado_local: 'enviado', estado_servidor: x.estado, recibido: !!x.recibido, hubo_unidad: !!x.hubo_unidad, error: null, creado: Date.parse(x.creado_en), cuenta: sesion.usuario.id,
         payload: { uuid_cliente: x.uuid, tipo: x.tipo, descripcion: x.descripcion, lat: x.lat, lon: x.lon, gravedad: x.gravedad, personas_afectadas: x.personas_afectadas, sos: x.sos },
       });
     }
@@ -647,3 +686,11 @@ if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catc
 pintarBotones();
 const vistaInicial = (location.hash || '').slice(1);
 irA(['reportes', 'avisos', 'cuenta'].includes(vistaInicial) ? vistaInicial : 'inicio'); irPaso(1); pintarCuenta(); pintarLista(); ubicar(); sincronizar(); cargarAlerta(); traerMisReportes();
+
+// Activar las notificaciones del teléfono para los avances del reporte (hay que pedirlo con un toque de la persona)
+const notifBtn = $('#notif-activar');
+if (notifBtn) notifBtn.onclick = async () => {
+  try { await Notification.requestPermission(); } catch {}
+  pintarLista();
+  if (Notification.permission === 'granted') aviso('Listo: te avisaremos cuando tu reporte avance.');
+};

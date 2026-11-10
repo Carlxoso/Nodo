@@ -64,6 +64,7 @@ CREATE TABLE incidentes (
   tramo               JSONB,                           -- tramo dibujado por la persona sobre la calle ([[lon,lat],…]) en un aviso de peligro
   peligro             BOOLEAN NOT NULL DEFAULT false,  -- aviso de peligro en el camino hecho por una persona que pasaba (no pide ayuda)
   sos                 BOOLEAN NOT NULL DEFAULT false,  -- reporte enviado con el botón SOS de la app (máxima prioridad)
+  recibido_en         TIMESTAMPTZ,                          -- cuándo el operador marcó el reporte como recibido (la persona lo ve en su seguimiento)
   creado_en           TIMESTAMPTZ NOT NULL DEFAULT now(),   -- hora del reporte en el servidor
   reportado_en        TIMESTAMPTZ NOT NULL DEFAULT now()    -- hora en el dispositivo (puede ser offline)
 );

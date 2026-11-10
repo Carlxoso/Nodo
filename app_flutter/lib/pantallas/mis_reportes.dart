@@ -56,7 +56,7 @@ class _Fila extends StatelessWidget {
       txt = sg.texto; icono = sg.icono; fondo = C.mareaClaro; color = C.marea;
       extra = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         if (sg.apoyo.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 2), child: Text(sg.apoyo, style: const TextStyle(color: C.marea, fontSize: 14))),
-        _Pasos(paso: sg.paso),
+        _Pasos(hechos: sg.hechos),
         if (r.unidades.isNotEmpty)
           SizedBox(
             width: double.infinity,
@@ -118,28 +118,37 @@ class _Fila extends StatelessWidget {
 }
 
 class _Pasos extends StatelessWidget {
-  final int paso;
-  const _Pasos({required this.paso});
+  final int hechos;
+  const _Pasos({required this.hechos});
   @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [ // arriba: los puntos quedan alineados aunque un texto ocupe dos líneas
-          for (var i = 0; i < pasosTxt.length; i++)
-            Expanded(
-              child: Column(children: [
-                Row(children: [
-                  Expanded(child: Container(height: 2, color: i == 0 ? Colors.transparent : (i <= paso ? C.marea : const Color(0xFFB4C0CA)))),
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    width: 12, height: 12,
-                    decoration: BoxDecoration(shape: BoxShape.circle, color: i < paso || (i == paso && paso == 3) ? C.marea : Colors.white, border: Border.all(color: i <= paso ? C.marea : const Color(0xFFB4C0CA), width: 2)),
+  Widget build(BuildContext context) {
+    const gris = Color(0xFFB4C0CA);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [ // arriba: los puntos quedan alineados aunque un texto ocupe dos líneas
+        for (var i = 0; i < pasosTxt.length; i++)
+          Expanded(
+            child: Column(children: [
+              Row(children: [
+                Expanded(child: Container(height: 2, color: i == 0 ? Colors.transparent : (i < hechos ? C.marea : gris))),
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 400),
+                  curve: Curves.easeOutBack,
+                  width: 18, height: 18,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: i < hechos ? C.marea : Colors.white,
+                    border: Border.all(color: i <= hechos ? C.marea : gris, width: 2),
                   ),
-                  Expanded(child: Container(height: 2, color: i == pasosTxt.length - 1 ? Colors.transparent : (i < paso ? C.marea : const Color(0xFFB4C0CA)))),
-                ]),
-                const SizedBox(height: 4),
-                Text(pasosTxt[i], textAlign: TextAlign.center, style: TextStyle(fontSize: 11.5, height: 1.2, color: i <= paso ? C.tinta : C.tinta2)),
+                  child: i < hechos ? const Icon(Icons.check, size: 12, color: Colors.white) : null,
+                ),
+                Expanded(child: Container(height: 2, color: i == pasosTxt.length - 1 ? Colors.transparent : (i + 1 < hechos ? C.marea : gris))),
               ]),
-            ),
-        ]),
-      );
+              const SizedBox(height: 4),
+              Text(pasosTxt[i], textAlign: TextAlign.center, style: TextStyle(fontSize: 11.5, height: 1.2, fontWeight: i == hechos - 1 || i == hechos ? FontWeight.w600 : FontWeight.w400, color: i <= hechos ? C.tinta : C.tinta2)),
+            ]),
+          ),
+      ]),
+    );
+  }
 }

@@ -51,7 +51,7 @@ const CAPAS = {
   vias:      { tabla: 'vias',                 props: ['id', 'nombre', 'estado', 'fuente'] },
   albergues: { tabla: 'albergues',            props: ['id', 'nombre', 'capacidad', 'ocupacion', 'servicios', 'fuente'] },
   servicios: { tabla: 'servicios_esenciales', props: ['id', 'tipo', 'nombre'] },
-  incidentes:{ extra: ASIGNACIONES_SQL, tabla: 'incidentes',           props: ['id', 'tipo', 'descripcion', 'gravedad', 'personas_afectadas', 'estado', 'fuente', 'confianza', 'prioridad', 'prioridad_desglose', 'creado_en', 'foto', 'confianza_detalle', 'sos', 'peligro', 'tramo'] },
+  incidentes:{ extra: ASIGNACIONES_SQL, tabla: 'incidentes',           props: ['id', 'tipo', 'descripcion', 'gravedad', 'personas_afectadas', 'estado', 'fuente', 'confianza', 'prioridad', 'prioridad_desglose', 'creado_en', 'foto', 'confianza_detalle', 'sos', 'peligro', 'tramo', 'recibido_en'] },
 };
 
 async function featureCollection({ tabla, props, extra }) {
@@ -119,7 +119,7 @@ app.patch('/api/incidentes/:id/estado', soloOperador, async (req, res) => {
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'id inválido' });
   if (!['pendiente', 'en_proceso', 'atendido'].includes(estado)) return res.status(400).json({ error: 'estado inválido' });
   try {
-    const { rows } = await pool.query('UPDATE incidentes SET estado = $1 WHERE id = $2 RETURNING id, estado', [estado, id]);
+    const { rows } = await pool.query('UPDATE incidentes SET estado = $1, recibido_en = COALESCE(recibido_en, now()) WHERE id = $2 RETURNING id, estado', [estado, id]);
     if (!rows.length) return res.status(404).json({ error: 'no encontrado' });
     if (estado === 'atendido') { // al cerrar el caso, las unidades quedan libres
       await pool.query(`UPDATE asignaciones SET estado = 'liberada', liberada_en = now() WHERE incidente_id = $1 AND estado <> 'liberada'`, [id]);
@@ -131,6 +131,19 @@ app.patch('/api/incidentes/:id/estado', soloOperador, async (req, res) => {
     console.error(e);
     res.status(500).json({ error: 'error interno' });
   }
+});
+
+// El operador confirma que recibió el reporte: la persona lo ve en su seguimiento y recibe un aviso
+app.patch('/api/incidentes/:id/recibido', soloOperador, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'id inválido' });
+  try {
+    const { rows } = await pool.query('UPDATE incidentes SET recibido_en = COALESCE(recibido_en, now()) WHERE id = $1 RETURNING id, recibido_en', [id]);
+    if (!rows.length) return res.status(404).json({ error: 'no encontrado' });
+    await auditar(pool, req.usuario.id, 'marcar_recibido', 'incidente', id);
+    publicar({ tipo: 'incidente_estado', id });
+    res.json(rows[0]);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'error interno' }); }
 });
 
 // ---------- Unidades asignadas a un caso ----------
@@ -149,6 +162,7 @@ app.post('/api/incidentes/:id/asignaciones', soloOperador, async (req, res) => {
       [id, unidad, nombre, req.usuario.id])).rows[0];
     // Al salir una unidad el caso deja de estar pendiente
     const est = (await pool.query(`UPDATE incidentes SET estado = 'en_proceso' WHERE id = $1 AND estado = 'pendiente' RETURNING estado`, [id])).rows[0];
+    await pool.query('UPDATE incidentes SET recibido_en = COALESCE(recibido_en, now()) WHERE id = $1', [id]); // asignar una unidad también es haberlo recibido
     await auditar(pool, req.usuario.id, `asignar_unidad:${unidad}`, 'incidente', id);
     publicar({ tipo: 'incidente_estado', id, estado: est ? est.estado : caso.estado });
     res.status(201).json({ id: a.id, estado: est ? est.estado : caso.estado, asignaciones: await activas(pool, id) });
@@ -491,6 +505,8 @@ app.get('/api/reportes/:uuid', async (req, res) => {
     const { rows } = await pool.query(
       `SELECT i.estado, i.tipo, i.creado_en, i.confianza_detalle->>'verificacion' AS verificacion, now() AS ahora,
               EXISTS (SELECT 1 FROM asignaciones a WHERE a.incidente_id = i.id) AS hubo_unidad,
+              (i.recibido_en IS NOT NULL OR i.estado <> 'pendiente' OR EXISTS (SELECT 1 FROM asignaciones a WHERE a.incidente_id = i.id)) AS recibido,
+              i.recibido_en,
               COALESCE((SELECT json_agg(json_build_object('unidad', a.unidad, 'estado', a.estado, 'asignada_en', a.asignada_en, 'llegada_en', a.llegada_en,
                           'origen', (SELECT json_build_object('lat', ST_Y(sv.geom), 'lon', ST_X(sv.geom), 'nombre', sv.nombre)
                                      FROM servicios_esenciales sv

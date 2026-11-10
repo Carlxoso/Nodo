@@ -39,7 +39,8 @@ async function migrar() {
     ADD COLUMN IF NOT EXISTS confianza_detalle JSONB,
     ADD COLUMN IF NOT EXISTS sos BOOLEAN NOT NULL DEFAULT false,
     ADD COLUMN IF NOT EXISTS peligro BOOLEAN NOT NULL DEFAULT false,
-    ADD COLUMN IF NOT EXISTS tramo JSONB`);
+    ADD COLUMN IF NOT EXISTS tramo JSONB,
+    ADD COLUMN IF NOT EXISTS recibido_en TIMESTAMPTZ`);
 }
 
 // Recalcula la confianza de un reporte ciudadano. Devuelve los ids de reportes vecinos (para recalcularlos también).

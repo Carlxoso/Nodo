@@ -165,6 +165,8 @@ function montarRutas(app, pool) {
     try {
       const { rows } = await pool.query(
         `SELECT uuid_cliente AS uuid, tipo, descripcion, gravedad, personas_afectadas, estado, sos, creado_en,
+                (recibido_en IS NOT NULL OR estado <> 'pendiente' OR EXISTS (SELECT 1 FROM asignaciones a WHERE a.incidente_id = incidentes.id)) AS recibido,
+                EXISTS (SELECT 1 FROM asignaciones a WHERE a.incidente_id = incidentes.id) AS hubo_unidad,
                 ST_Y(geom) AS lat, ST_X(geom) AS lon
          FROM incidentes WHERE usuario_id = $1 AND uuid_cliente IS NOT NULL
          ORDER BY creado_en DESC LIMIT 100`, [req.usuario.id]);

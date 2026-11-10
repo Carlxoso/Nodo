@@ -187,8 +187,9 @@ function unidadesHtml(p) {
     <button class="u-asignar" data-asignar="${esc(p.id)}">Asignar</button></div>`;
   return `<div class="unidades"><b>Unidades asignadas</b>${filas || '<small class="u-vacio">Ninguna todavía.</small>'}${form}</div>`;
 }
+const recibidoCaso = (p) => !!(p.recibido_en || p.estado !== 'pendiente' || (p.asignaciones || []).length);
 function accionesHtml(p) {
-  return `<div class="acciones">${ESTADOS.filter(([v]) => v !== p.estado)
+  return `<div class="acciones">${recibidoCaso(p) ? '' : `<button class="recibir" data-recibido="${esc(p.id)}">${ico('ok-circulo')}Marcar recibido</button>`}${ESTADOS.filter(([v]) => v !== p.estado)
     .map(([v, n]) => `<button data-id="${esc(p.id)}" data-estado="${v}">${n}</button>`).join('')}
     <button class="peligro" data-eliminar="${esc(p.id)}" title="Eliminar caso" aria-label="Eliminar caso">${ico('eliminar')}<span class="t">¿Eliminar?</span></button></div>`;
 }
@@ -343,8 +344,11 @@ function filaCaso(p, porId) {
     <div class="cuerpo"><div class="titulo">${ico(TIPO_ICO[p.tipo] || 'otro')}${esc(TIPO_NOMBRE[p.tipo] || p.tipo)}</div>
     <p class="desc">${esc(p.descripcion || 'Sin descripción')}</p>
     <div class="datos">${p.sos ? '<span class="chip sos-chip">SOS</span>' : ''}${p.peligro ? `<span class="chip peligro-chip">${ico('peligro')}Peligro en la vía</span>` : ''}<span class="chip"><i class="punto" style="--c:${FUENTE[p.fuente] || '#777'}"></i>${esc(FUENTE_NOMBRE[p.fuente] || p.fuente)}</span>
-    <span class="chip">${esc(ESTADO_NOMBRE[p.estado] || p.estado)}</span><span class="chip">${ico('personas')}${esc(p.personas_afectadas)}</span>${verifChip(p)}${unidadesChips(p)}</div></div>`;
+    <span class="chip">${esc(ESTADO_NOMBRE[p.estado] || p.estado)}</span><span class="chip">${ico('personas')}${esc(p.personas_afectadas)}</span>${verifChip(p)}${unidadesChips(p)}
+    ${recibidoCaso(p) ? `<span class="chip recibido-chip">${ico('ok-circulo')}Recibido</span>` : `<button type="button" class="recibir recibir-fila" data-recibido="${esc(p.id)}" title="Avisa a la persona que su reporte llegó">${ico('ok-circulo')}Marcar recibido</button>`}</div></div>`;
   activar(li, () => { const m = porId[p.id]; if (m) enfocar(m); });
+  const rb = li.querySelector('button[data-recibido]');
+  if (rb) { rb.onclick = (e) => { e.stopPropagation(); marcarRecibido(rb.dataset.recibido, rb); }; rb.onkeydown = (e) => e.stopPropagation(); }
   li.append(botonEliminar(p.id));
   return li;
 }
@@ -411,6 +415,11 @@ function botonEliminar(id) {
   b.onkeydown = (e) => e.stopPropagation();
   return b;
 }
+async function marcarRecibido(id, btn) {
+  if (btn) btn.disabled = true;
+  try { await mandar(`/api/incidentes/${id}/recibido`, 'PATCH'); mapa.closePopup(); cargar(); }
+  catch (e) { if (btn) btn.disabled = false; if (e.message !== 'auth') alert('No se pudo marcar como recibido. Intenta de nuevo.'); }
+}
 async function cambiarEstado(id, estado) {
   try {
     const r = await fetch(`/api/incidentes/${id}/estado`, { method: 'PATCH',
@@ -451,6 +460,7 @@ function enlazarPopup(popup) {
       requestAnimationFrame(paso);
     });
   });
+  el.querySelectorAll('button[data-recibido]').forEach((b) => { b.onclick = () => marcarRecibido(b.dataset.recibido, b); });
   el.querySelectorAll('button[data-estado]').forEach((b) => { b.onclick = () => cambiarEstado(b.dataset.id, b.dataset.estado); });
   el.querySelectorAll('button[data-eliminar]').forEach((b) => { b.onclick = () => pedirEliminar(b, () => eliminarCaso(b.dataset.eliminar)); });
   el.querySelectorAll('button[data-del-zona]').forEach((b) => { b.onclick = () => pedirEliminar(b, () => borrar(`/api/zonas/${b.dataset.delZona}`, 'la zona')); });
