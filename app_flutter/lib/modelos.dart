@@ -10,6 +10,10 @@ class TipoCaso {
 const tiposCaso = <TipoCaso>[
   TipoCaso('rescate', 'Necesito rescate', Icons.sos, Color(0xFFB42318)),
   TipoCaso('inundacion', 'Inundación', Icons.water, Color(0xFF2E6FD0)),
+  TipoCaso('terremoto', 'Terremoto', Icons.vibration, Color(0xFF7A4B9B)),
+  TipoCaso('tsunami', 'Tsunami', Icons.tsunami, Color(0xFF0E7C86)),
+  TipoCaso('incendio', 'Incendio', Icons.local_fire_department, Color(0xFFD9480F)),
+  TipoCaso('derrumbe', 'Derrumbe', Icons.landslide, Color(0xFF6D4C41)),
   TipoCaso('deslizamiento', 'Deslizamiento', Icons.terrain, Color(0xFF8A5A2B)),
   TipoCaso('via_cortada', 'Vía cortada', Icons.block, Color(0xFFD1571F)),
   TipoCaso('otro', 'Otro problema', Icons.help_outline, Color(0xFF55677A)),
@@ -31,6 +35,9 @@ const tiposPeligro = <TipoPeligro>[
   TipoPeligro('hundimiento', 'Hundimiento o hueco', 'otro', Icons.arrow_circle_down, Color(0xFF6B4FA0)),
   TipoPeligro('otro', 'Otro peligro', 'otro', Icons.warning_amber_rounded, Color(0xFF55677A)),
 ];
+
+/// Tipos que la persona puede elegir en el formulario (el de rescate solo lo usa el botón SOS).
+final tiposElegibles = tiposCaso.where((t) => t.v != 'rescate').toList();
 
 TipoCaso tipoPorId(String? v) => tiposCaso.firstWhere((t) => t.v == v, orElse: () => tiposCaso.last);
 

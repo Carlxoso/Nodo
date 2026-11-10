@@ -26,16 +26,24 @@ class _NuevoReporteState extends State<NuevoReporte> {
   late bool esSos = widget.sos;
   int personas = 0;
   final desc = TextEditingController();
+  final personasCtl = TextEditingController(text: '0');
   String? foto; // data:image/jpeg;base64,...
   bool atras = false, enviando = false, exito = false;
 
   @override
   void dispose() {
     desc.dispose();
+    personasCtl.dispose();
     super.dispose();
   }
 
+  void _fijarPersonas(int n) {
+    personas = n.clamp(0, 999);
+    personasCtl.value = TextEditingValue(text: '$personas', selection: TextSelection.collapsed(offset: '$personas'.length));
+  }
+
   void ir(int n) => setState(() {
+        if (esSos && n < 3) return; // en SOS no se vuelve a los pasos 1 y 2
         atras = n < paso;
         paso = n;
       });
@@ -88,12 +96,23 @@ class _NuevoReporteState extends State<NuevoReporte> {
     return Stack(children: [
       Scaffold(
         appBar: AppBar(
-          leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => paso > 1 ? ir(paso - 1) : Navigator.pop(context)),
-          title: const Text('Nuevo reporte'),
+          leading: IconButton(icon: const Icon(Icons.arrow_back), tooltip: esSos ? 'Cancelar el SOS y volver al menú principal' : 'Volver', onPressed: () => esSos || paso <= 1 ? Navigator.pop(context) : ir(paso - 1)), // en SOS vuelve al menú principal
+          title: Text(esSos ? 'SOS · Pedir ayuda' : 'Nuevo reporte'),
           actions: [Padding(padding: const EdgeInsets.only(right: 12), child: ListenableBuilder(listenable: widget.almacen, builder: (_, __) => Center(child: _ChipMini(almacen: widget.almacen))))],
         ),
         body: Column(children: [
-          _Etapas(paso: paso),
+          if (esSos)
+            Container(
+              margin: const EdgeInsets.fromLTRB(16, 8, 16, 0), padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: const Color(0xFFFBEAE8), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE7B4AE), width: 1.5)),
+              child: const Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Icon(Icons.warning_amber_rounded, color: Color(0xFFB42318), size: 22),
+                SizedBox(width: 10),
+                Expanded(child: Text('Pedido de ayuda urgente. Se enviará con tu ubicación. ¿Fue sin querer? Toca la flecha para cancelar.', style: TextStyle(color: Color(0xFF8E1B10), fontWeight: FontWeight.w600, fontSize: 14, height: 1.3))),
+              ]),
+            )
+          else
+            _Etapas(paso: paso),
           Expanded(
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 350),
@@ -119,7 +138,7 @@ class _NuevoReporteState extends State<NuevoReporte> {
           const _H('¿Qué está pasando?'),
           GridView.count(
             crossAxisCount: 2, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), mainAxisSpacing: 10, crossAxisSpacing: 10, childAspectRatio: 2.3,
-            children: [for (final t in tiposCaso) _TipoBtn(t: t, activo: tipo == t.v, onTap: () => setState(() { tipo = t.v; esSos = false; }))],
+            children: [for (final t in tiposElegibles) _TipoBtn(t: t, activo: tipo == t.v, onTap: () => setState(() { tipo = t.v; esSos = false; }))],
           ),
           const _H('¿Qué tan grave es?'),
           Row(children: [
@@ -152,9 +171,23 @@ class _NuevoReporteState extends State<NuevoReporte> {
           const Text('Personas afectadas', style: TextStyle(fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
           Row(children: [
-            _Redondo(Icons.remove, () => setState(() => personas = personas > 0 ? personas - 1 : 0)),
-            SizedBox(width: 70, child: Text('$personas', textAlign: TextAlign.center, style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w600))),
-            _Redondo(Icons.add, () => setState(() => personas = personas < 999 ? personas + 1 : 999)),
+            _Redondo(Icons.remove, () => setState(() => _fijarPersonas(personas - 1))),
+            // Para una emergencia rápida: se puede escribir la cifra con el teclado numérico
+            SizedBox(
+              width: 96,
+              child: TextField(
+                controller: personasCtl,
+                keyboardType: TextInputType.number,
+                textAlign: TextAlign.center,
+                maxLength: 3,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w600),
+                decoration: InputDecoration(counterText: '', filled: true, fillColor: Colors.white, contentPadding: const EdgeInsets.symmetric(vertical: 8), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14))),
+                onTap: () => personasCtl.selection = TextSelection(baseOffset: 0, extentOffset: personasCtl.text.length),
+                onChanged: (v) => setState(() => personas = v.isEmpty ? 0 : int.parse(v)),
+              ),
+            ),
+            _Redondo(Icons.add, () => setState(() => _fijarPersonas(personas + 1))),
           ]),
           const SizedBox(height: 18),
           const Text('Qué ves', style: TextStyle(fontWeight: FontWeight.w600)),
