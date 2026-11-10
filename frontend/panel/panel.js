@@ -104,6 +104,9 @@ function mostrarUsuario(u) {
   document.getElementById('usuario').textContent = `${u.nombre} (${u.rol})`;
   document.getElementById('salir').hidden = false;
 }
+// Usuarios e Informe se abren en otra pestaña; window.open copia la sesión del panel (sessionStorage) a la pestaña nueva
+document.getElementById('btn-usuarios').addEventListener('click', () => window.open('usuarios.html', '_blank'));
+document.getElementById('btn-informe').addEventListener('click', () => window.open('informe.html', '_blank'));
 document.getElementById('form-login').addEventListener('submit', async (e) => {
   e.preventDefault();
   const err = document.getElementById('l-error'), btn = document.getElementById('l-enviar'), txt = document.getElementById('l-enviar-txt');
