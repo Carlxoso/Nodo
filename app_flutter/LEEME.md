@@ -17,7 +17,7 @@ seguimiento por etapas, minimapa con recorrido simulado de la ayuda (aviso con s
 ## Conexión con el servidor
 
 - Servidor NODO encendido (`npm start`, puerto 3000). Windows puede pedir permiso del firewall: aceptar en red privada.
-- La app ya viene conectada al servidor en la nube (`https://nodo-production-2d.up.railway.app`); no hay que configurar nada. Para pruebas locales, cambia la dirección en Ajustes (emulador: `http://10.0.2.2:3000`).
+- La app ya viene conectada al servidor en la nube (`https://nodo-production-2d.up.railway.app`); no hay que configurar nada. La dirección está fija en `lib/config.dart` (no se edita desde la app; en Ajustes solo se puede probar la conexión).
 - Teléfono real: PC y teléfono en el mismo Wi-Fi. En la app, ícono de engranaje (arriba a la derecha en Inicio)
   → escribe `http://IP-de-tu-PC:3000` → «Guardar y probar conexión». La IP se ve con `ipconfig`.
 

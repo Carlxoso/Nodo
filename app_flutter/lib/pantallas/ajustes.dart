@@ -4,7 +4,7 @@ import '../almacen.dart';
 import '../config.dart';
 import '../tema.dart';
 
-/// Dirección del servidor NODO. En un teléfono real: la IP de la PC en el Wi-Fi, por ejemplo http://192.168.1.20:3000
+/// Muestra el servidor de NODO (fijo, no se puede editar) y permite probar la conexión.
 class Ajustes extends StatefulWidget {
   final Almacen almacen;
   const Ajustes({super.key, required this.almacen});
@@ -13,28 +13,20 @@ class Ajustes extends StatefulWidget {
 }
 
 class _AjustesState extends State<Ajustes> {
-  late final c = TextEditingController(text: Config.baseUrl);
   String? resultado;
   bool? ok;
   bool probando = false;
 
-  @override
-  void dispose() {
-    c.dispose();
-    super.dispose();
-  }
-
   Future<void> probar() async {
-    await Config.guardar(c.text);
     setState(() { probando = true; resultado = null; });
     try {
-      final r = await http.get(Uri.parse('${Config.baseUrl}/api/alertas')).timeout(const Duration(seconds: 6));
+      final r = await http.get(Uri.parse('${Config.baseUrl}/api/alertas')).timeout(const Duration(seconds: 8));
       ok = r.statusCode == 200;
-      resultado = ok! ? 'Conexión correcta con ${Config.baseUrl}' : 'El servidor respondió con el código ${r.statusCode}';
+      resultado = ok! ? 'Conexión correcta con el servidor de NODO.' : 'El servidor respondió con el código ${r.statusCode}.';
       if (ok!) { widget.almacen.cargarAvisos(); widget.almacen.sincronizar(); }
     } catch (_) {
       ok = false;
-      resultado = 'No se pudo conectar. Revisa la dirección y que el teléfono tenga internet (o la misma red Wi-Fi si es un servidor local).';
+      resultado = 'No se pudo conectar. Revisa que el teléfono tenga conexión a internet.';
     }
     if (mounted) setState(() => probando = false);
   }
@@ -44,21 +36,21 @@ class _AjustesState extends State<Ajustes> {
     return Scaffold(
       appBar: AppBar(title: const Text('Servidor')),
       body: ListView(padding: const EdgeInsets.all(16), children: [
-        const Text('Dirección del servidor NODO', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+        const Text('Servidor NODO', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
         const SizedBox(height: 8),
-        TextField(
-          controller: c, keyboardType: TextInputType.url, autocorrect: false,
-          decoration: InputDecoration(filled: true, fillColor: Colors.white, hintText: Config.porDefecto, border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(color: const Color(0xFFE9EEF1), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFD5DDE3))),
+          child: Row(children: [
+            const Icon(Icons.lock_outline, size: 18, color: C.tinta2),
+            const SizedBox(width: 10),
+            Expanded(child: SelectableText(Config.baseUrl, style: const TextStyle(color: C.tinta2, fontSize: 15))),
+          ]),
         ),
         const SizedBox(height: 8),
-        const Text('Normalmente no hace falta cambiarla: la app ya viene conectada al servidor de NODO.\nSolo para pruebas locales: emulador http://10.0.2.2:3000 · teléfono http://IP-de-la-PC:3000', style: TextStyle(color: C.tinta2, fontSize: 14)),
+        const Text('La app ya viene conectada al servidor de NODO. Esta dirección no se puede modificar.', style: TextStyle(color: C.tinta2, fontSize: 14)),
         const SizedBox(height: 16),
-        FilledButton(onPressed: probando ? null : probar, style: FilledButton.styleFrom(backgroundColor: C.marea, padding: const EdgeInsets.symmetric(vertical: 14)), child: Text(probando ? 'Probando…' : 'Guardar y probar conexión')),
-        const SizedBox(height: 8),
-        TextButton(
-          onPressed: probando ? null : () { c.text = Config.porDefecto; probar(); },
-          child: const Text('Usar el servidor oficial de NODO'),
-        ),
+        FilledButton(onPressed: probando ? null : probar, style: FilledButton.styleFrom(backgroundColor: C.marea, padding: const EdgeInsets.symmetric(vertical: 14)), child: Text(probando ? 'Probando…' : 'Probar conexión')),
         if (resultado != null)
           Padding(padding: const EdgeInsets.only(top: 14), child: Text(resultado!, style: TextStyle(color: ok == true ? C.ok : C.critica, fontWeight: FontWeight.w500))),
       ]),
