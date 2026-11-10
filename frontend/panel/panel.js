@@ -584,6 +584,7 @@ async function cargar() {
     limpiarRutasFijas(ultimoPorId);
     pintarLista(i, ultimoPorId);
     if (tabActiva === 'tablero') cargarTablero();
+    if (tabActiva === 'familias') cargarFamilias();
     const hora = new Date().toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     estado.textContent = (wsActivo ? 'En vivo, ' : 'En línea, actualizado ') + hora;
     if (nuevoId != null) { destacar(nuevoId); nuevoId = null; }
@@ -1160,7 +1161,7 @@ async function mandar(url, metodo, cuerpo) {
 // Cada pregunta es una tarjeta plegable con su respuesta resumida en la cabecera; se recuerda cuáles están abiertas
 const TAB_PREF = 'nodo_tab_abiertas';
 let tabAbiertas;
-try { const g = localStorage.getItem(TAB_PREF); tabAbiertas = new Set(g === null ? ['sectores'] : JSON.parse(g)); } catch { tabAbiertas = new Set(['sectores']); }
+try { const g = localStorage.getItem(TAB_PREF); tabAbiertas = new Set(g === null ? ['tendencia', 'sectores'] : JSON.parse(g)); } catch { tabAbiertas = new Set(['tendencia', 'sectores']); }
 const guardarAbiertas = () => { try { localStorage.setItem(TAB_PREF, JSON.stringify([...tabAbiertas])); } catch {} };
 const tarjeta = (k, titulo, resumen, cuerpo) =>
   `<details class="q" data-k="${k}"${tabAbiertas.has(k) ? ' open' : ''}><summary><span class="q-t">${titulo}</span><span class="q-r">${resumen}</span></summary><div class="q-c"><div class="q-ci">${cuerpo}</div></div></details>`;
@@ -1177,6 +1178,43 @@ function alternarTarjeta(det) {
   const a = cuerpo.animate([{ height: (abrir ? 0 : alto) + 'px', opacity: abrir ? 0 : 1 }, { height: (abrir ? alto : 0) + 'px', opacity: abrir ? 1 : 0 }], { duration: 240, easing: 'cubic-bezier(.4,0,.2,1)' });
   cuerpo._anim = a;
   a.onfinish = () => { cuerpo._anim = null; if (!abrir) det.open = false; };
+}
+
+// ---------- Módulo 6: tendencia de riesgo por sector ----------
+const TEND_TXT = { sube: 'Sube', estable: 'Estable', baja: 'Baja' };
+function sparkHtml(serie) {
+  const max = Math.max(1, ...serie), w = 5, g = 2;
+  return `<svg class="tend-spark" width="${serie.length * (w + g) - g}" height="18" viewBox="0 0 ${serie.length * (w + g) - g} 18" role="img" aria-label="Reportes por hora, últimas 6 horas">${
+    serie.map((n, i) => { const h = Math.max(2, Math.round((n / max) * 16)); return `<rect x="${i * (w + g)}" y="${18 - h}" width="${w}" height="${h}" rx="1" opacity="${n ? 1 : 0.25}"/>`; }).join('')}</svg>`;
+}
+function tarjetaTendencia(td) {
+  if (!td || !td.zonas || !td.zonas.length) return '';
+  const zs = td.zonas.slice(0, 6);
+  const suben = td.zonas.filter((z) => z.tendencia === 'sube').length;
+  const resumen = suben ? plural(suben, 'sector sube', 'sectores suben') : (zs[0].proyectado >= 55 ? esc(zs[0].nombre) : 'Sin cambios fuertes');
+  const filas = zs.map((z) => {
+    const f = z.factores, color = NIVEL[z.categoria_proyectada] || '#888';
+    const vias = f.vias_cortadas ? ` · ${plural(f.vias_cortadas, 'vía cortada cerca', 'vías cortadas cerca')}` : '';
+    const alertar = z.tendencia === 'sube' || z.proyectado >= 55 ? `<button type="button" class="btn-mini" data-alertar="${esc(z.id)}" data-zona="${esc(z.nombre)}">Alertar</button>` : '';
+    return `<div class="tend-fila" style="--c:${color}">
+      <div class="tend-cab"><b>${esc(z.nombre)}</b><span class="chip t-${esc(z.tendencia)}">${esc(TEND_TXT[z.tendencia])}</span><span class="tend-cifras">${esc(z.actual)} <small>→</small> ${esc(z.proyectado)}</span></div>
+      <div class="tend-barras" title="Riesgo ahora y proyectado a ${esc(td.horizonte_h)} h"><u class="proy" style="width:${esc(z.proyectado)}%"></u><u class="ahora" style="width:${esc(z.actual)}%"></u></div>
+      <div class="tend-pie"><span>${plural(f.reportes_ultima_hora, 'reporte', 'reportes')} en la última hora (antes ${esc(f.reportes_hora_previa)})${vias}</span>${sparkHtml(z.serie)}${alertar}</div></div>`;
+  }).join('');
+  const cuerpo = `<p class="sec">Riesgo ahora → proyectado a ${esc(td.horizonte_h)} horas (0 a 100).</p>${filas}<p class="nota-modelo">${esc(td.nota)}</p>`;
+  return tarjeta('tendencia', '¿Qué sectores van a empeorar?', resumen, cuerpo);
+}
+
+// ---------- Módulo 5: resumen de asistencia humanitaria en el tablero ----------
+function tarjetaAsistencia(f) {
+  if (!f) return '';
+  const nec = Object.entries(f.necesidades).filter(([, v]) => v.pendientes + v.atendidas > 0);
+  const chips = nec.length ? `<div class="datos">${nec.map(([k, v]) => `<span class="chip">${icoNec(k)}${esc(NEC_NOMBRE[k])} <b class="num">${esc(v.pendientes)}</b>${v.atendidas ? `<small> de ${esc(v.pendientes + v.atendidas)}</small>` : ''}</span>`).join('')}</div><p class="sec">Pendientes por entregar (de las necesidades registradas).</p>` : '';
+  const cuerpo = f.familias
+    ? `<p class="grande"><span class="num">${esc(f.familias)}</span> ${f.familias === 1 ? 'familia' : 'familias'}</p>${vacio(`${plural(f.personas, 'persona', 'personas')}. ${f.sin_albergue ? plural(f.sin_albergue, 'familia sin albergue', 'familias sin albergue') : 'Todas con albergue'}.`)}${chips}`
+    : vacio('Aún no hay familias registradas.');
+  return tarjeta('asistencia', 'Familias y asistencia humanitaria', f.familias ? (f.con_pendientes ? plural(f.con_pendientes, 'con pendientes', 'con pendientes') : 'Todo entregado') : 'Sin registros',
+    cuerpo + `<button type="button" class="btn-mini" data-abrir-familias>Abrir registro de familias</button>`);
 }
 
 function pintarTablero(t) {
@@ -1247,10 +1285,10 @@ function pintarTablero(t) {
   // Se conservan los textos del formulario de alerta si el tablero se redibuja mientras se escribe
   const f = document.getElementById('form-alerta');
   const previo = f ? { zona: f.zona.value, nivel: f.nivel.value, mensaje: f.mensaje.value } : null;
-  vistaTablero.innerHTML = alertas +
+  vistaTablero.innerHTML = alertas + tarjetaTendencia(t.tendencia) +
     tarjeta('pasa', '¿Qué está pasando?', r1, c1) + tarjeta('donde', '¿Dónde?', r2, c2) + tarjeta('personas', '¿Cuántas personas están afectadas?', r3, c3) +
     tarjeta('sectores', '¿Qué sectores priorizar?', r4, c4) + tarjeta('vias', '¿Qué vías están cortadas?', r5, c5) + tarjeta('albergues', '¿Dónde hay albergue?', r6, c6) +
-    tarjeta('recursos', '¿Qué se debe movilizar?', r7, c7) + tarjeta('coordinacion', '¿Cómo se coordina?', r8, c8);
+    tarjeta('recursos', '¿Qué se debe movilizar?', r7, c7) + tarjeta('coordinacion', '¿Cómo se coordina?', r8, c8) + tarjetaAsistencia(t.familias);
   const g = document.getElementById('form-alerta');
   if (previo && g) { g.zona.value = previo.zona; g.nivel.value = previo.nivel; g.mensaje.value = previo.mensaje; }
 }
@@ -1277,10 +1315,23 @@ vistaTablero.addEventListener('click', (e) => {
   if (sm && vistaTablero.contains(sm)) { e.preventDefault(); alternarTarjeta(sm.parentElement); return; }
   const x = e.target.closest('[data-cancelar-alerta]');
   if (x) { pedirEliminar(x, () => borrar(`/api/alertas/${x.dataset.cancelarAlerta}`, 'la alerta')); return; }
+  const al = e.target.closest('[data-alertar]');
+  if (al) { prepararAlerta(al.dataset.alertar, al.dataset.zona); return; }
+  if (e.target.closest('[data-abrir-familias]')) { cambiarTab('familias'); return; }
   const b = e.target.closest('[data-caso]');
   const m = b && ultimoPorId[b.dataset.caso];
   if (m) enfocar(m);
 });
+// Deja lista una alerta preventiva para el sector que va a empeorar (el operador la revisa y la emite)
+function prepararAlerta(zonaId, nombre) {
+  const det = vistaTablero.querySelector('details[data-k="coordinacion"]');
+  if (det && !det.open) alternarTarjeta(det);
+  const f = document.getElementById('form-alerta');
+  if (!f) return;
+  f.zona.value = zonaId; f.nivel.value = 'preventiva';
+  f.mensaje.value = `Se prevé aumento de emergencias en ${nombre}. Mantente atento, evita zonas bajas y vías cortadas, y ten listo un lugar seguro.`;
+  setTimeout(() => { f.scrollIntoView({ behavior: 'smooth', block: 'center' }); f.mensaje.focus(); }, 280);
+}
 vistaTablero.addEventListener('change', async (e) => {
   const i = e.target.closest('input[data-alb]');
   if (!i) return;
@@ -1302,14 +1353,106 @@ function cambiarTab(nombre) {
   tabActiva = nombre;
   document.getElementById('vista-casos').hidden = nombre !== 'casos';
   vistaTablero.hidden = nombre !== 'tablero';
+  document.getElementById('vista-familias').hidden = nombre !== 'familias';
   document.querySelector('.tabs').dataset.activa = nombre;
-  for (const n of ['casos', 'tablero']) document.getElementById('tab-' + n).setAttribute('aria-selected', String(n === nombre));
+  for (const n of ['casos', 'tablero', 'familias']) document.getElementById('tab-' + n).setAttribute('aria-selected', String(n === nombre));
   if (nombre === 'tablero') { ultimaFirmaTablero = ''; vistaTablero.classList.add('entrada'); cargarTablero().then(() => setTimeout(() => vistaTablero.classList.remove('entrada'), 700)); }
+  if (nombre === 'familias') cargarFamilias(true);
   mapa.invalidateSize();
 }
 document.getElementById('tab-casos').onclick = () => cambiarTab('casos');
 document.getElementById('tab-tablero').onclick = () => cambiarTab('tablero');
+document.getElementById('tab-familias').onclick = () => cambiarTab('familias');
 
+
+// ---------- Módulo 5: familias afectadas y asistencia humanitaria ----------
+const NEC_NOMBRE = { agua: 'Agua', alimentos: 'Alimentos', medicinas: 'Medicinas', abrigo: 'Abrigo', higiene: 'Higiene' };
+const icoNec = (n) => ico(n === 'agua' ? 'agua' : 'nec-' + n);
+const vistaFamilias = document.getElementById('vista-familias');
+let famDatos = null, famFirma = '', famPendiente = false;
+const opcionesAlbergue = (albs, actual, personas) => `<option value="">Sin albergue</option>` + albs.map((a) => {
+  const cupo = a.capacidad - a.ocupacion, sirve = a.id === actual || cupo >= personas;
+  return `<option value="${esc(a.id)}"${a.id === actual ? ' selected' : ''}${sirve ? '' : ' disabled'}>${esc(a.nombre)} (cupo ${esc(cupo)})</option>`;
+}).join('');
+function formularioFamilia(d) {
+  return `<details class="fam-form" id="fam-form"><summary>Registrar una familia</summary>
+    <form novalidate>
+      <label class="c">Jefe o jefa de familia<input type="text" name="jefe" maxlength="80" autocomplete="off" placeholder="Nombre y apellido"></label>
+      <label class="c">Teléfono (opcional)<input type="tel" name="telefono" maxlength="20" inputmode="tel" autocomplete="off" placeholder="09…"></label>
+      <label class="c">Integrantes<input type="number" name="integrantes" min="1" max="30" value="1" inputmode="numeric"></label>
+      <span class="c" style="display:block;margin-top:8px;font-size:13px;font-weight:500">Necesidades</span>
+      <div class="opciones">${d.necesidades.map((n) => `<label><input type="checkbox" name="nec" value="${esc(n)}">${icoNec(n)}${esc(NEC_NOMBRE[n] || n)}</label>`).join('')}</div>
+      <label class="c">Albergue<select name="albergue">${opcionesAlbergue(d.albergues, null, 1)}</select></label>
+      <button class="btn" type="submit">Registrar familia</button>
+      <p id="fam-msg" class="fam-msg" role="status"></p>
+    </form></details><div id="fam-dinamico"></div>`;
+}
+function pintarFamilias(d) {
+  famDatos = d;
+  if (!document.getElementById('fam-form')) vistaFamilias.innerHTML = `<p class="fam-priv">${ico('candado')}<span>Nombres y teléfonos se guardan cifrados y solo los ve el personal del centro de operaciones.</span></p>` + formularioFamilia(d);
+  else { const s = vistaFamilias.querySelector('select[name="albergue"]'), v = s.value; s.innerHTML = opcionesAlbergue(d.albergues, null, Number(vistaFamilias.querySelector('input[name="integrantes"]').value) || 1); s.value = v; }
+  const r = d.resumen;
+  const nec = Object.entries(r.necesidades).filter(([, v]) => v.pendientes + v.atendidas > 0);
+  const resumen = `<div class="fam-resumen"><div><b>${esc(r.familias)}</b><span>familias</span></div><div><b>${esc(r.personas)}</b><span>personas</span></div><div><b>${esc(r.sin_albergue)}</b><span>sin albergue</span></div></div>`
+    + (nec.length ? `<div class="fam-nec">${nec.map(([k, v]) => `<span class="chip">${icoNec(k)}${esc(NEC_NOMBRE[k])} <b class="num">${esc(v.pendientes)}</b> pendientes</span>`).join('')}</div>` : '');
+  const lista = d.familias.length ? d.familias.map((f) => `<div class="fam-card" data-fam="${esc(f.id)}">
+      <div class="fam-cab"><div><b>${esc(f.jefe || '(dato no legible)')}</b><small>${plural(f.integrantes, 'persona', 'personas')}${f.telefono ? ` · <a class="tel" href="tel:${esc(f.telefono.replace(/[^0-9+]/g, ''))}">${esc(f.telefono)}</a>` : ''}</small></div>
+        <button type="button" class="fam-del" data-fam-del="${esc(f.id)}" aria-label="Eliminar familia">${ico('eliminar')}<span class="t"></span></button></div>
+      ${f.necesidades.length ? `<div class="fam-chips">${f.necesidades.map((n) => `<button type="button" class="${f.atendidas.includes(n) ? 'hecho' : ''}" data-fam-nec="${esc(f.id)}" data-n="${esc(n)}" title="${f.atendidas.includes(n) ? 'Entregado. Toca para marcar pendiente' : 'Pendiente. Toca para marcar entregado'}">${icoNec(n)}${esc(NEC_NOMBRE[n] || n)}</button>`).join('')}</div>` : '<p class="sec">Sin necesidades registradas.</p>'}
+      <label class="alb">Albergue<select data-fam-alb="${esc(f.id)}">${opcionesAlbergue(d.albergues, f.albergue_id, f.integrantes)}</select></label></div>`).join('')
+    : vacio('Aún no hay familias registradas. Usa «Registrar una familia».');
+  document.getElementById('fam-dinamico').innerHTML = resumen + lista;
+}
+async function cargarFamilias(forzar) {
+  const din = document.getElementById('fam-dinamico');
+  if (!forzar && din && din.contains(document.activeElement) && /^(SELECT|INPUT)$/.test(document.activeElement.tagName)) { famPendiente = true; return; }
+  famPendiente = false;
+  try {
+    const d = await pedir('/api/familias');
+    const firma = JSON.stringify(d);
+    if (firma === famFirma && document.getElementById('fam-form')) return;
+    famFirma = firma; pintarFamilias(d);
+  } catch (e) { if (e.message !== 'auth' && !document.getElementById('fam-form')) vistaFamilias.innerHTML = '<p class="sec">No se pudo cargar el registro de familias. Se reintentará solo.</p>'; }
+}
+vistaFamilias.addEventListener('focusout', () => { if (famPendiente) setTimeout(() => cargarFamilias(), 150); });
+async function cambiarFamilia(id, cuerpo) {
+  try { await mandar(`/api/familias/${id}`, 'PATCH', cuerpo); famFirma = ''; await cargarFamilias(true); cargar(); }
+  catch (e) { if (e.message !== 'auth') { alert('No se pudo actualizar: ' + e.message); famFirma = ''; cargarFamilias(true); } }
+}
+vistaFamilias.addEventListener('click', (e) => {
+  const n = e.target.closest('[data-fam-nec]');
+  if (n) {
+    const f = famDatos && famDatos.familias.find((x) => String(x.id) === n.dataset.famNec); if (!f) return;
+    const at = new Set(f.atendidas); if (at.has(n.dataset.n)) at.delete(n.dataset.n); else at.add(n.dataset.n);
+    return cambiarFamilia(f.id, { atendidas: [...at] });
+  }
+  const x = e.target.closest('[data-fam-del]');
+  if (x) pedirEliminar(x, async () => {
+    try { await mandar(`/api/familias/${x.dataset.famDel}`, 'DELETE'); famFirma = ''; await cargarFamilias(true); cargar(); }
+    catch (err) { if (err.message !== 'auth') alert('No se pudo eliminar. Intenta de nuevo.'); }
+  });
+});
+vistaFamilias.addEventListener('change', (e) => {
+  const s = e.target.closest('select[data-fam-alb]');
+  if (s) cambiarFamilia(s.dataset.famAlb, { albergue_id: s.value ? Number(s.value) : null });
+  if (e.target.name === 'integrantes') { const sel = vistaFamilias.querySelector('select[name="albergue"]'), v = sel.value; if (famDatos) { sel.innerHTML = opcionesAlbergue(famDatos.albergues, null, Number(e.target.value) || 1); sel.value = v; } }
+});
+vistaFamilias.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const f = e.target, msg = document.getElementById('fam-msg');
+  const mal = (t) => { msg.className = 'fam-msg mal'; msg.textContent = t; };
+  if (f.jefe.value.trim().length < 2) return mal('Escribe el nombre del jefe o jefa de familia.');
+  try {
+    await mandar('/api/familias', 'POST', {
+      jefe: f.jefe.value, telefono: f.telefono.value, integrantes: Number(f.integrantes.value) || 1,
+      necesidades: [...f.querySelectorAll('input[name="nec"]:checked')].map((i) => i.value),
+      albergue_id: f.albergue.value ? Number(f.albergue.value) : null,
+    });
+    f.reset(); f.integrantes.value = 1; document.getElementById('fam-form').open = false;
+    msg.className = 'fam-msg'; msg.textContent = 'Familia registrada.';
+    famFirma = ''; await cargarFamilias(true); cargar();
+  } catch (err) { if (err.message !== 'auth') mal('No se pudo registrar: ' + err.message); }
+});
 
 // ---------- Tiempo real (WebSocket) ----------
 let ws = null, wsActivo = false, wsEspera = 1000, wsTimer = null, tic = 0;

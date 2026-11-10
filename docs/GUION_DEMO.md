@@ -36,3 +36,8 @@ Demo Day: martes 10 de noviembre, 14:00 a 17:00. Code Freeze: 13:00.
 - **¿Qué datos reales usan?** Hoy son simulados; está listo para conectar fuentes oficiales.
 - **¿Y la privacidad?** Anónimo por defecto, sin metadatos en la foto, acceso al panel por roles y auditoría.
 - **¿Cómo escala?** PostgreSQL con PostGIS y una API sin estado; se despliega en un servidor.
+
+## Módulos 5 y 6 (extra para el jurado)
+- **Módulo 5 · Familias y asistencia humanitaria:** pestaña «Familias» del panel. Se registra la familia (nombre y teléfono se guardan cifrados con AES-256-GCM), sus necesidades y el albergue; al asignar albergue se ocupa cupo solo. Tocar una necesidad la marca como entregada. El tablero resume cuántas familias hay y qué falta entregar.
+- **Módulo 6 · Análisis predictivo:** primera tarjeta del tablero, «¿Qué sectores van a empeorar?». Es un modelo estadístico de tendencia, no una IA: compara los reportes de la última hora con los de la hora anterior, suma el nivel de la zona y las vías cortadas, y proyecta el riesgo a 6 horas (amortiguado). Cada cifra se puede explicar. El botón «Alertar» deja lista una alerta preventiva para el sector.
+- Para la demo: cargar el escenario «Jueves 06:00» (los reportes quedan recientes y los sectores aparecen subiendo).

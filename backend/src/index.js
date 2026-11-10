@@ -12,6 +12,8 @@ const { migrar, verificarCruzada, verificarTodos } = require('./verificacion');
 const { cargarEscenario } = require('./escenario');
 const { construirTablero } = require('./tablero');
 const { construirInforme } = require('./informe');
+const { migrarFamilias, montarFamilias } = require('./familias');
+const { calcularTendencia } = require('./tendencia');
 const { UNIDADES, ESTADOS_ASIG, MAX_ACTIVAS, migrarUnidades, migrarBomberos, migrarLugares, migrarServicios, activas, limpiarNombre } = require('./unidades');
 
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 16) {
@@ -217,6 +219,14 @@ app.get('/api/tablero', soloOperador, async (_req, res) => {
   try { res.json(await construirTablero()); }
   catch (e) { console.error(e); res.status(500).json({ error: 'error interno' }); }
 });
+
+// Módulo 6: tendencia de riesgo por sector (modelo estadístico)
+app.get('/api/tendencia', soloOperador, async (_req, res) => {
+  try { res.json(await calcularTendencia()); }
+  catch (e) { console.error(e); res.status(500).json({ error: 'error interno' }); }
+});
+// Módulo 5: familias afectadas y asistencia humanitaria (datos personales cifrados)
+montarFamilias(app, { pool, soloOperador, auditar, publicar, recalcular });
 
 // Carga el escenario «Jueves 06:00». Solo un administrador puede pedir además borrar los reportes ciudadanos de prueba.
 app.post('/api/escenario/jueves-0600', soloOperador, async (req, res) => {
@@ -635,6 +645,7 @@ iniciarBD(pool)
   .then(() => migrarServicios(pool))
   .then(() => migrarBomberos(pool))
   .then(() => migrarLugares(pool))
+  .then(() => migrarFamilias(pool))
   .then(() => verificarTodos())
   .then(() => recalcular())
   .then((n) => console.log(`Prioridades calculadas: ${n} incidentes`))

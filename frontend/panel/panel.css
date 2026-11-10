@@ -126,8 +126,9 @@ aside h2 { font-size: 15px; font-weight: 600; margin: 14px 0 8px; }
 
 /* Pestañas y tablero */
 .tabs { position: relative; display: flex; gap: 4px; padding: 3px; margin-bottom: 12px; background: var(--linea); border-radius: 10px; }
-.tabs::before { content: ''; position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc(50% - 5px); background: var(--superficie); border-radius: 8px; box-shadow: 0 1px 3px rgba(20,38,58,.2); transition: transform .28s cubic-bezier(.4,0,.2,1); }
+.tabs::before { content: ''; position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc((100% - 14px) / 3); background: var(--superficie); border-radius: 8px; box-shadow: 0 1px 3px rgba(20,38,58,.2); transition: transform .28s cubic-bezier(.4,0,.2,1); }
 .tabs[data-activa="tablero"]::before { transform: translateX(calc(100% + 4px)); }
+.tabs[data-activa="familias"]::before { transform: translateX(calc(200% + 8px)); }
 .tabs button { position: relative; z-index: 1; flex: 1; padding: 7px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--tinta-2); font: 600 14px var(--fuente); cursor: pointer; transition: color .2s; }
 .tabs button:hover { color: var(--tinta); }
 .tabs button[aria-selected="true"] { color: var(--tinta); }
@@ -469,3 +470,61 @@ body.redimensionando #mapa { pointer-events: none; }
 .recibir-fila { padding: 3px 10px; font-size: 12px; }
 .recibido-chip { color: #1E7A4B; border-color: #BFE3CF; background: #EAF6EF; }
 .recibido-chip .ic { width: 13px; height: 13px; color: #1E7A4B; }
+
+/* ---- Módulo 6: tendencia de riesgo ---- */
+.tend-fila { padding: 8px 0; border-top: 1px solid var(--papel); }
+.tend-fila:first-of-type { border-top: 0; }
+.tend-cab { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.tend-cab b { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.tend-cifras { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tend-cifras small { font-weight: 500; color: var(--tinta-2); }
+.tend-barras { position: relative; height: 8px; margin: 6px 0 4px; border-radius: 4px; background: var(--papel); overflow: hidden; }
+.tend-barras u { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; text-decoration: none; }
+.tend-barras .ahora { background: var(--c); }
+.tend-barras .proy { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--c) 45%, transparent) 0 4px, transparent 4px 8px); }
+.tend-pie { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--tinta-2); }
+.tend-pie span:first-child { flex: 1; }
+.tend-spark { flex: none; display: block; }
+.tend-spark rect { fill: var(--c); }
+.chip.t-sube { background: #FBEAE8; color: #B42318; border-color: #E9A9A3; }
+.chip.t-baja { background: #E4F3EB; color: #2F7D5B; border-color: #B5DCC7; }
+.chip.t-estable { background: var(--papel); color: var(--tinta-2); }
+.btn-mini { padding: 3px 9px; border: 1.5px solid var(--marea); border-radius: 7px; background: transparent; color: var(--marea); font: 600 12.5px var(--fuente); cursor: pointer; }
+.btn-mini:hover { background: var(--marea-claro); }
+.nota-modelo { margin: 8px 0 0; font-size: 12px; color: var(--tinta-2); line-height: 1.35; }
+
+/* ---- Módulo 5: familias y asistencia humanitaria ---- */
+.fam-resumen { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; }
+.fam-resumen div { padding: 8px 6px; border: 1px solid var(--linea); border-radius: 10px; background: var(--superficie); text-align: center; }
+.fam-resumen b { display: block; font-size: 24px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.fam-resumen span { font-size: 12px; color: var(--tinta-2); }
+.fam-nec { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.fam-nec .chip .ic, .fam-card .chip .ic { width: 14px; height: 14px; }
+.fam-form { margin-bottom: 12px; border: 1px solid var(--linea); border-radius: 10px; background: var(--superficie); }
+.fam-form > summary { padding: 10px 12px; font-weight: 600; cursor: pointer; }
+.fam-form form { padding: 0 12px 12px; }
+.fam-form label.c { display: block; margin-top: 8px; font-size: 13px; font-weight: 500; }
+.fam-form input[type=text], .fam-form input[type=tel], .fam-form input[type=number], .fam-form select, .fam-card select { width: 100%; margin-top: 3px; padding: 6px 8px; border: 1.5px solid var(--linea-2); border-radius: 8px; background: var(--papel); color: var(--tinta); font: inherit; }
+.fam-form .opciones { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.fam-form .opciones label { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px 4px 8px; border: 1.5px solid var(--linea-2); border-radius: 99px; cursor: pointer; font-size: 13px; background: var(--papel); }
+.fam-form .opciones label:has(input:checked) { border-color: var(--marea); background: var(--marea-claro); color: var(--marea); font-weight: 600; }
+.fam-form .opciones input { accent-color: var(--marea); }
+.fam-form .btn { width: 100%; margin-top: 10px; }
+.fam-msg { margin: 6px 0 0; font-size: 13px; }
+.fam-msg.mal { color: var(--p-critica); }
+.fam-card { padding: 10px 12px; margin-bottom: 8px; border: 1px solid var(--linea); border-radius: 10px; background: var(--superficie); }
+.fam-cab { display: flex; align-items: flex-start; gap: 8px; }
+.fam-cab b { display: block; font-size: 15px; overflow-wrap: anywhere; }
+.fam-cab small { color: var(--tinta-2); font-size: 12.5px; }
+.fam-cab > div { flex: 1; min-width: 0; }
+.fam-card a.tel { color: var(--marea); font-weight: 600; text-decoration: none; }
+.fam-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 6px; }
+.fam-chips button { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px 3px 8px; border: 1.5px solid #E8C77A; border-radius: 99px; background: #FFF0D1; color: #8A5B00; font: 600 12.5px var(--fuente); cursor: pointer; }
+.fam-chips button.hecho { border-color: #B5DCC7; background: #E4F3EB; color: #2F7D5B; text-decoration: line-through; }
+.fam-card label.alb { display: block; font-size: 12.5px; color: var(--tinta-2); }
+.fam-priv { margin: 0 0 10px; font-size: 12px; color: var(--tinta-2); display: flex; gap: 6px; align-items: flex-start; }
+.fam-priv .ic { width: 14px; height: 14px; flex: none; margin-top: 1px; }
+.fam-del { flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 4px 6px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--tinta-2); cursor: pointer; font: 600 12px var(--fuente); }
+.fam-del:hover { background: #FBEAE8; color: var(--p-critica); }
+.fam-del.confirmar, .fam-del.confirmar:hover { background: var(--p-critica); color: #fff; }
+.fam-del .ic { width: 15px; height: 15px; }
