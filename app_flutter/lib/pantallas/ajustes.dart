@@ -34,7 +34,7 @@ class _AjustesState extends State<Ajustes> {
       if (ok!) { widget.almacen.cargarAvisos(); widget.almacen.sincronizar(); }
     } catch (_) {
       ok = false;
-      resultado = 'No se pudo conectar. Revisa la dirección, que el servidor esté encendido y que el teléfono use la misma red Wi-Fi.';
+      resultado = 'No se pudo conectar. Revisa la dirección y que el teléfono tenga internet (o la misma red Wi-Fi si es un servidor local).';
     }
     if (mounted) setState(() => probando = false);
   }
@@ -48,12 +48,17 @@ class _AjustesState extends State<Ajustes> {
         const SizedBox(height: 8),
         TextField(
           controller: c, keyboardType: TextInputType.url, autocorrect: false,
-          decoration: InputDecoration(filled: true, fillColor: Colors.white, hintText: 'http://192.168.1.20:3000', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+          decoration: InputDecoration(filled: true, fillColor: Colors.white, hintText: Config.porDefecto, border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
         ),
         const SizedBox(height: 8),
-        const Text('Emulador de Android: http://10.0.2.2:3000\nTeléfono real: la IP de tu PC en el Wi-Fi y el puerto 3000.', style: TextStyle(color: C.tinta2, fontSize: 14)),
+        const Text('Normalmente no hace falta cambiarla: la app ya viene conectada al servidor de NODO.\nSolo para pruebas locales: emulador http://10.0.2.2:3000 · teléfono http://IP-de-la-PC:3000', style: TextStyle(color: C.tinta2, fontSize: 14)),
         const SizedBox(height: 16),
         FilledButton(onPressed: probando ? null : probar, style: FilledButton.styleFrom(backgroundColor: C.marea, padding: const EdgeInsets.symmetric(vertical: 14)), child: Text(probando ? 'Probando…' : 'Guardar y probar conexión')),
+        const SizedBox(height: 8),
+        TextButton(
+          onPressed: probando ? null : () { c.text = Config.porDefecto; probar(); },
+          child: const Text('Usar el servidor oficial de NODO'),
+        ),
         if (resultado != null)
           Padding(padding: const EdgeInsets.only(top: 14), child: Text(resultado!, style: TextStyle(color: ok == true ? C.ok : C.critica, fontWeight: FontWeight.w500))),
       ]),
