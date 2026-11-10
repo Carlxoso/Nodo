@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NODO · Centro de operaciones</title>
+  <meta name="theme-color" content="#0E5C73">
+  <link rel="icon" href="/compartido/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="/ciudadano/icon-192.png" sizes="192x192" type="image/png">
+  <link rel="apple-touch-icon" href="/ciudadano/icon-192.png">
+  <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="/compartido/carga.css">
+  <script>window.NODO_CARGA_LAZY = true;</script>
+  <script src="/compartido/carga.js"></script>
+  <link rel="stylesheet" href="/compartido/base.css">
+  <link rel="stylesheet" href="panel.css">
+</head>
+<body>
+  <header class="barra">
+    <span class="logo">
+      <img class="logo-img" src="/compartido/logo.svg" alt="" width="30" height="30">
+      NODO <span class="sub"><svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#centro"></use></svg>Centro de operaciones</span>
+    </span>
+    <p class="aviso">Apoyo a la decisión. No reemplaza al COE ni al 911.</p>
+    <button id="btn-usuarios" class="btn-sec" type="button" hidden>
+      <svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#usuarios"></use></svg>Usuarios
+    </button>
+    <button id="btn-sonido" class="btn-sec" type="button" aria-label="Sonido de avisos" aria-pressed="true" title="Sonido de avisos">
+      <svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#sonido"></use></svg><span>Sonido</span>
+    </button>
+    <button id="btn-informe" class="btn-sec" hidden>
+      <svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#informe"></use></svg>Informe COE
+    </button>
+    <span id="estado" class="chip" role="status">Conectando…</span>
+    <span id="usuario" class="usuario"></span>
+    <button id="salir" class="btn-sec salir" hidden>
+      <svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#salir"></use></svg>Salir
+    </button>
+  </header>
+
+  <div id="login" class="login" hidden>
+    <div class="login-caja">
+      <aside class="login-marca" aria-hidden="true">
+        <img src="/compartido/logo.svg" alt="" width="64" height="64">
+        <h2>NODO</h2>
+        <p>Centro de operaciones</p>
+        <ul>
+          <li><svg class="ic"><use href="/compartido/iconos.svg#alerta"></use></svg>Casos priorizados en tiempo real</li>
+          <li><svg class="ic"><use href="/compartido/iconos.svg#ruta"></use></svg>Rutas y unidades en curso</li>
+          <li><svg class="ic"><use href="/compartido/iconos.svg#escudo"></use></svg>Acceso solo para personal autorizado</li>
+        </ul>
+      </aside>
+      <form id="form-login" novalidate>
+        <h1>Bienvenido de nuevo</h1>
+        <p class="sec">Ingresa con tu cuenta del centro de operaciones.</p>
+        <label>Correo
+          <span class="campo-ico"><svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#correo"></use></svg><input type="email" id="l-email" required autocomplete="username" placeholder="nombre@institucion.gob.ec"></span>
+        </label>
+        <label>Contraseña
+          <span class="campo-ico con-ojo"><svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#candado"></use></svg><input type="password" id="l-pass" required autocomplete="current-password" placeholder="Tu contraseña"><button type="button" class="ojo" aria-label="Mostrar contraseña" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#ojo"></use></svg></button></span>
+        </label>
+        <p id="l-error" class="error" role="alert"></p>
+        <button type="submit" id="l-enviar" class="btn grande"><span id="l-enviar-txt">Entrar al panel</span></button>
+        <p class="login-pie">Apoyo a la decisión. No reemplaza al COE ni al 911.</p>
+      </form>
+    </div>
+  </div>
+
+  <main>
+    <aside id="lateral">
+      <div class="tabs" role="tablist" data-activa="casos">
+        <button role="tab" id="tab-casos" aria-selected="true">Casos</button>
+        <button role="tab" id="tab-tablero" aria-selected="false">Tablero</button>
+      </div>
+      <div id="vista-casos">
+        <div id="resumen" class="resumen" aria-label="Casos abiertos por prioridad"></div>
+        <h2>Casos por prioridad</h2>
+        <ul id="lista" class="casos"></ul>
+        <details id="atendidos" class="atendidos" hidden>
+          <summary>Atendidos <span id="n-atendidos" class="num">0</span></summary>
+          <ul id="lista-atendidos" class="casos-min"></ul>
+        </details>
+      </div>
+      <div id="vista-tablero" hidden></div>
+    </aside>
+    <div id="mapa" aria-label="Mapa de Esmeraldas con incidentes"></div>
+  </main>
+  <script src="/compartido/ojo.js"></script>
+  <script src="/vendor/leaflet/leaflet.js"></script>
+  <script src="panel.js"></script>
+</body>
+</html>

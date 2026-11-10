@@ -1,0 +1,18 @@
+/* Pantalla de carga de NODO (PWA, panel, ingreso) */
+.carga { position: fixed; inset: 0; z-index: 99999; display: grid; place-items: center; align-content: center; gap: 22px; padding: 24px; text-align: center;
+  background: radial-gradient(120% 90% at 50% 20%, #0E7C86 0%, #0A4153 45%, #06202C 100%); color: #fff;
+  transition: opacity .45s ease, visibility .45s; }
+.carga.oculta { opacity: 0; visibility: hidden; pointer-events: none; }
+.carga-logo { position: relative; width: 168px; height: 168px; display: grid; place-items: center; animation: carga-flota 2.4s ease-in-out infinite; } /* el conjunto flota unido: las ondas nunca se desfasan del logo */
+.carga-logo img { position: relative; z-index: 2; width: 96px; height: 96px; border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+/* Las ondas nacen exactamente del borde del logo, quedan detrás de él y se expanden hacia afuera sin tocarlo */
+.carga-logo i { position: absolute; z-index: 1; width: 96px; height: 96px; left: 36px; top: 36px; border-radius: 24px; background: rgba(255,255,255,.10); animation: carga-onda 2.8s cubic-bezier(.2,.6,.3,1) infinite; }
+.carga-logo i + i { animation-delay: 1.4s; }
+.carga b { font: 700 30px/1 "IBM Plex Sans Condensed", "Segoe UI", system-ui, sans-serif; letter-spacing: .16em; }
+.carga small { display: block; margin-top: 8px; font: 500 14px "IBM Plex Sans", "Segoe UI", system-ui, sans-serif; letter-spacing: .02em; color: rgba(255,255,255,.78); }
+.carga-barra { width: 150px; height: 4px; border-radius: 4px; background: rgba(255,255,255,.2); overflow: hidden; }
+.carga-barra::after { content: ""; display: block; width: 40%; height: 100%; border-radius: 4px; background: #F59E0B; animation: carga-barra 1.2s ease-in-out infinite; }
+@keyframes carga-flota { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+@keyframes carga-onda { 0% { transform: scale(1); opacity: .9; } 100% { transform: scale(1.75); opacity: 0; } }
+@keyframes carga-barra { 0% { transform: translateX(-110%); } 100% { transform: translateX(380%); } }
+@media (prefers-reduced-motion: reduce) { .carga-logo, .carga-logo i, .carga-barra::after { animation: none; } .carga-barra::after { width: 100%; } }

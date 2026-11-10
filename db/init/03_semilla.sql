@@ -26,7 +26,9 @@ INSERT INTO albergues (nombre, capacidad, ocupacion, servicios, geom) VALUES
 INSERT INTO servicios_esenciales (tipo, nombre, geom) VALUES
  ('salud',    'Hospital (simulado)',        ST_SetSRID(ST_MakePoint(-79.655,0.961),4326)),
  ('agua',     'Planta de agua (simulada)',  ST_SetSRID(ST_MakePoint(-79.648,0.972),4326)),
- ('bomberos', 'Bomberos (simulado)',        ST_SetSRID(ST_MakePoint(-79.658,0.957),4326));
+ ('bomberos', 'Cuartel de Bomberos', ST_SetSRID(ST_MakePoint(-79.65342,0.96622),4326)),
+ ('bomberos', 'Cuerpo de Bomberos', ST_SetSRID(ST_MakePoint(-79.6727656,0.9355125),4326)),
+ ('bomberos', 'Cuerpo de Bomberos San Rafael', ST_SetSRID(ST_MakePoint(-79.6866481,0.9111271),4326));
 
 INSERT INTO alertas (zona_id, mensaje, nivel, fuente) VALUES
  (1, 'ALERTA OFICIAL DE DEMOSTRACIÓN: lluvia intensa y posible desborde del río. No es una alerta real.', 'critica', 'oficial');

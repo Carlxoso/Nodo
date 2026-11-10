@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Usuarios · NODO</title>
+  <link rel="icon" href="/compartido/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/compartido/base.css">
+  <link rel="stylesheet" href="usuarios.css">
+</head>
+<body>
+  <header class="barra-u">
+    <span class="logo"><img class="logo-img" src="/compartido/logo.svg" alt="" width="28" height="28">NODO</span>
+    <h1>Gestión de usuarios</h1>
+    <span class="nota">Solo administradores. Los cambios de rol y de estado quedan en la bitácora.</span>
+  </header>
+  <main class="u-main">
+    <section class="tarjeta">
+      <h2>Crear una cuenta del centro de operaciones</h2>
+      <form id="form-nuevo" class="form-nuevo" novalidate>
+        <label>Nombre<input id="n-nombre" maxlength="80" autocomplete="off" required></label>
+        <label>Correo<input id="n-email" type="email" autocomplete="off" required></label>
+        <label>Contraseña inicial<input id="n-pass" type="text" minlength="8" autocomplete="off" required placeholder="Mínimo 8 caracteres"></label>
+        <label>Rol
+          <select id="n-rol"><option value="operador">Operador</option><option value="admin">Administrador</option><option value="ciudadano">Ciudadano</option></select>
+        </label>
+        <button class="btn" type="submit">Crear cuenta</button>
+      </form>
+      <p id="n-msg" class="msg" role="status"></p>
+    </section>
+    <section class="tarjeta">
+      <div class="cab-lista"><h2>Cuentas <span id="total" class="cuenta"></span></h2><input id="filtro" type="search" placeholder="Buscar por nombre o correo" aria-label="Buscar usuarios"></div>
+      <div id="lista" class="tabla-u" aria-live="polite"><p class="cargando">Cargando usuarios…</p></div>
+    </section>
+  </main>
+  <script src="usuarios.js"></script>
+</body>
+</html>

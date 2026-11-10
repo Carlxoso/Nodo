@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#06202C">
+  <title>NODO · Pedir ayuda</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="/compartido/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="icon-192.png" sizes="192x192" type="image/png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="/compartido/carga.css">
+  <script src="/compartido/carga.js"></script>
+  <link rel="stylesheet" href="/compartido/base.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body data-vista="inicio">
+  <div id="alerta" class="alerta" role="alert" hidden></div>
+
+  <!-- INICIO: escena inmersiva con el botón de ayuda -->
+  <section id="v-inicio" class="vista inicio" aria-label="Inicio">
+    <div class="escena" aria-hidden="true">
+      <i class="nube n1"></i><i class="nube n2"></i><i class="lluvia"></i>
+      <svg class="olas" viewBox="0 0 1200 220" preserveAspectRatio="none">
+        <path class="ola o3" d="M0 90 C150 40 300 140 450 90 S750 40 900 90 S1050 130 1200 80 V220 H0Z"/>
+        <path class="ola o2" d="M0 120 C150 80 300 160 450 120 S750 80 900 120 S1050 150 1200 110 V220 H0Z"/>
+        <path class="ola o1" d="M0 150 C150 120 300 180 450 150 S750 120 900 150 S1050 175 1200 145 V220 H0Z"/>
+      </svg>
+    </div>
+    <div class="hero">
+      <header class="hero-barra">
+        <span class="logo">
+          <img class="logo-img" src="/compartido/logo.svg" alt="" width="30" height="30">
+          NODO
+        </span>
+        <span class="hero-der">
+          <button type="button" id="chip-cuenta" class="chip chip-cuenta"><svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#cuenta"></use></svg><span id="chip-cuenta-txt">Ingresar</span></button>
+          <span class="chip js-conexion" role="status">…</span>
+        </span>
+      </header>
+      <h1>¿Necesitas ayuda?</h1>
+      <p class="hero-sub">Toca el botón y avisamos al centro de operaciones de tu ciudad.</p>
+      <button type="button" id="sos" class="sos" aria-label="Pedir ayuda: necesito rescate">
+        <i class="anillo a1"></i><i class="anillo a2"></i><i class="anillo a3"></i>
+        <span class="sos-cuerpo"><b>SOS</b><small>Pedir ayuda</small></span>
+      </button>
+      <p class="hero-nota">NODO no reemplaza a los servicios de emergencia.</p>
+    </div>
+    <div class="hoja-inicio">
+      <div class="ubic-mini" id="ubic-mini">
+        <i class="ub-ico"><svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#ubicacion"></use></svg></i>
+        <div><small>Tu ubicación</small><b id="ubic-mini-txt">Buscando…</b></div>
+        <button type="button" id="mini-reintentar" class="enlace">Actualizar</button>
+      </div>
+      <button type="button" id="btn-peligro" class="tarjeta-peligro">
+        <span class="tp-ico"><svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#peligro"></use></svg></span>
+        <span class="tp-txt"><b>Vi un peligro en el camino</b><small>Deslave, calle inundada, vía bloqueada… avisa en 2 toques.</small></span>
+        <svg class="ic tp-flecha" aria-hidden="true"><use href="/compartido/iconos.svg#desplegar"></use></svg>
+      </button>
+      <h2 class="sub-t">O elige qué está pasando</h2>
+      <div id="atajos" class="atajos"></div>
+    </div>
+  </section>
+
+  <!-- NUEVO REPORTE: 3 pasos -->
+  <section id="v-nuevo" class="vista nuevo" aria-label="Nuevo reporte" hidden>
+    <header class="cab">
+      <button type="button" id="atras" class="icono-btn" aria-label="Volver"><svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#volver"></use></svg></button>
+      <h1>Nuevo reporte</h1>
+      <span class="chip js-conexion" role="status">…</span>
+    </header>
+    <ol class="etapas" aria-label="Pasos del reporte">
+      <li data-p="1"><i>1</i><span>Qué pasa</span></li>
+      <li data-p="2"><i>2</i><span>Detalles</span></li>
+      <li data-p="3"><i>3</i><span>Enviar</span></li>
+    </ol>
+    <div class="panos">
+      <div class="pano" data-p="1">
+        <h2 id="h-tipo">¿Qué está pasando?</h2>
+        <div id="tipos" class="tipos" role="group" aria-labelledby="h-tipo"></div>
+        <h2 id="h-grav">¿Qué tan grave es?</h2>
+        <div id="gravedades" class="medidor" role="group" aria-labelledby="h-grav"></div>
+        <p id="grav-texto" class="ayuda"></p>
+      </div>
+      <div class="pano" data-p="2" hidden>
+        <h2>Cuéntanos más <span class="opc">(opcional)</span></h2>
+        <div class="campo">
+          <span class="etiqueta">Personas afectadas</span>
+          <div class="paso">
+            <button type="button" id="menos" aria-label="Una persona menos"><svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#menos"></use></svg></button>
+            <output id="personas" class="num" aria-live="polite">0</output>
+            <button type="button" id="mas" aria-label="Una persona más"><svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#mas"></use></svg></button>
+          </div>
+        </div>
+        <div class="campo">
+          <label class="etiqueta" for="descripcion">Qué ves</label>
+          <textarea id="descripcion" maxlength="500" rows="3" placeholder="Describe el lugar y lo que ocurre"></textarea>
+        </div>
+        <div class="campo">
+          <span class="etiqueta">Foto</span>
+          <input type="file" id="foto" accept="image/*" capture="environment" class="sr-only">
+          <label class="boton-foto" for="foto">
+            <svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#camara"></use></svg>
+            <span id="foto-texto">Tomar o elegir una foto</span>
+          </label>
+          <img id="preview" alt="Vista previa de la foto" hidden>
+        </div>
+        <p class="ayuda">No pedimos tu nombre ni tu teléfono. A la foto se le quitan los datos de ubicación y de cámara antes de enviarse.</p>
+      </div>
+      <div class="pano" data-p="3" hidden>
+        <h2>Revisa y envía</h2>
+        <div id="resumen" class="resumen"></div>
+        <h2 id="h-ubic" class="sub-t">Dónde estás</h2>
+        <div id="ubic" class="ubic">Buscando tu ubicación…</div>
+        <div class="fila">
+          <button type="button" id="btn-ubicar" class="btn-sec">Reintentar GPS</button>
+          <button type="button" id="btn-demo" class="btn-sec" hidden>Usar ubicación de prueba</button>
+        </div>
+        <p id="msg" class="msg" role="status"></p>
+      </div>
+    </div>
+    <footer class="accion">
+      <button type="button" id="siguiente" class="btn grande" disabled><span id="siguiente-txt">Siguiente</span></button>
+      <button type="button" id="enviar" class="btn grande enviar" disabled hidden>
+        <svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#enviar"></use></svg>
+        <span id="enviar-txt">Enviar reporte</span>
+      </button>
+    </footer>
+  </section>
+
+  <!-- AVISAR DE UN PELIGRO EN EL CAMINO -->
+  <section id="v-peligro" class="vista nuevo peligro" aria-label="Avisar de un peligro" hidden>
+    <header class="cab">
+      <button type="button" id="pg-atras" class="icono-btn" aria-label="Volver"><svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#volver"></use></svg></button>
+      <h1>Avisar de un peligro</h1>
+      <span class="chip js-conexion" role="status">…</span>
+    </header>
+    <div class="pg-caja">
+      <p class="ayuda pg-intro">Si pasas por un lugar peligroso, márcalo en el mapa. Así el centro de operaciones y otras personas lo saben y pueden evitarlo.</p>
+      <h2 id="pg-h1" class="sub-t">¿Qué viste?</h2>
+      <div id="pg-tipos" class="tipos" role="group" aria-labelledby="pg-h1"></div>
+      <h2 id="pg-h2" class="sub-t">¿Se puede pasar?</h2>
+      <div id="pg-paso" class="pg-paso" role="group" aria-labelledby="pg-h2">
+        <button type="button" data-g="2" aria-pressed="false"><b>Con cuidado</b><small>Hay paso, pero es riesgoso</small></button>
+        <button type="button" data-g="4" aria-pressed="false"><b>No se puede</b><small>Está bloqueado o intransitable</small></button>
+      </div>
+      <h2 id="pg-h3" class="sub-t">Márcalo en el mapa</h2>
+      <p class="ayuda pg-mapa-ayuda">Toca la calle donde está el peligro. Si abarca un tramo, toca más puntos y se dibuja siguiendo la calle.</p>
+      <div class="pg-mapa-caja">
+        <div id="pg-mapa" role="application" aria-label="Mapa para marcar el peligro"></div>
+        <div class="pg-mapa-herr">
+          <button type="button" id="pg-yo" aria-label="Ir a mi ubicación"><svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#ubicacion"></use></svg></button>
+          <button type="button" id="pg-deshacer" aria-label="Quitar el último punto" disabled><svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#volver"></use></svg></button>
+          <button type="button" id="pg-limpiar" aria-label="Borrar la marca" disabled><svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#eliminar"></use></svg></button>
+        </div>
+      </div>
+      <p id="pg-mapa-txt" class="ayuda pg-mapa-txt">Sin marcar: se usará tu ubicación actual.</p>
+      <div class="campo">
+        <label class="etiqueta" for="pg-nota">Detalle <span class="opc">(opcional)</span></label>
+        <textarea id="pg-nota" maxlength="300" rows="2" placeholder="Por ejemplo: entre la Av. Olmedo y la calle 9"></textarea>
+      </div>
+      <div class="campo">
+        <input type="file" id="pg-foto" accept="image/*" capture="environment" class="sr-only">
+        <label class="boton-foto" for="pg-foto"><svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#camara"></use></svg><span id="pg-foto-texto">Agregar una foto (opcional)</span></label>
+        <img id="pg-preview" alt="Vista previa de la foto" hidden>
+      </div>
+      <h2 class="sub-t">Dónde estás</h2>
+      <div id="pg-ubic" class="ubic">Buscando tu ubicación…</div>
+      <div class="fila"><button type="button" id="pg-gps" class="btn-sec">Reintentar GPS</button><button type="button" id="pg-demo" class="btn-sec" hidden>Usar ubicación de prueba</button></div>
+      <p class="ayuda pg-sos">¿Hay personas heridas o en peligro? <button type="button" id="pg-sos" class="enlace">Pide ayuda ahora</button></p>
+    </div>
+    <footer class="accion">
+      <button type="button" id="pg-enviar" class="btn grande enviar" disabled><svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#peligro"></use></svg><span id="pg-enviar-txt">Marcar peligro aquí</span></button>
+    </footer>
+  </section>
+
+  <!-- MIS REPORTES -->
+  <section id="v-reportes" class="vista claro" aria-label="Mis reportes" hidden>
+    <header class="cab"><h1>Mis reportes</h1><span class="chip js-conexion" role="status">…</span></header>
+    <ul id="lista" class="lista"></ul>
+  </section>
+
+  <!-- AVISOS OFICIALES -->
+  <section id="v-avisos" class="vista claro" aria-label="Avisos" hidden>
+    <header class="cab"><h1>Avisos del centro de operaciones</h1></header>
+    <ul id="avisos-lista" class="avisos-lista"></ul>
+  </section>
+
+  <!-- CUENTA: opcional; con cuenta se ven los reportes en cualquier teléfono -->
+  <section id="v-cuenta" class="vista claro" aria-label="Cuenta" hidden>
+    <header class="cab"><h1>Mi cuenta</h1><span class="chip js-conexion" role="status">…</span></header>
+    <div class="cuenta-caja">
+      <div id="cuenta-fuera">
+        <div class="pestanas" role="tablist" data-activa="entrar">
+          <button type="button" role="tab" id="tab-entrar" aria-selected="true">Ingresar</button>
+          <button type="button" role="tab" id="tab-crear" aria-selected="false">Crear cuenta</button>
+        </div>
+        <div class="cuenta-marca">
+          <img src="/compartido/logo.svg" alt="" width="72" height="72">
+          <h2 id="cuenta-titulo">Te damos la bienvenida</h2>
+          <p id="cuenta-sub">Ingresa para ver tus reportes en cualquier teléfono.</p>
+        </div>
+        <form id="form-cuenta" novalidate>
+          <label class="campo-c plegable cerrado" id="c-nombre-l" inert><span>Nombre</span><span class="campo-ico"><svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#usuario"></use></svg><input id="c-nombre" type="text" autocomplete="name" maxlength="80" placeholder="Cómo te llamas"></span></label>
+          <label class="campo-c"><span>Correo</span><span class="campo-ico"><svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#correo"></use></svg><input id="c-email" type="email" autocomplete="email" inputmode="email" placeholder="tucorreo@ejemplo.com"></span></label>
+          <label class="campo-c"><span>Contraseña</span><span class="campo-ico con-ojo"><svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#candado"></use></svg><input id="c-pass" type="password" autocomplete="current-password" minlength="8" placeholder="Mínimo 8 caracteres"><button type="button" class="ojo" aria-label="Mostrar contraseña" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#ojo"></use></svg></button></span></label>
+          <p id="c-error" class="c-error" role="alert"></p>
+          <button type="submit" id="c-enviar" class="btn grande"><span id="c-enviar-txt">Ingresar</span></button>
+        </form>
+        <ul class="c-ventajas">
+          <li><svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#reportes"></use></svg><span>Tus reportes te siguen a cualquier teléfono</span></li>
+          <li><svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#escudo"></use></svg><span>Los reportes con cuenta tienen más confianza</span></li>
+          <li><svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#ok-circulo"></use></svg><span>Es opcional: sin cuenta también puedes pedir ayuda</span></li>
+        </ul>
+      </div>
+      <div id="cuenta-dentro" hidden>
+        <div class="perfil">
+          <i id="perfil-ini" class="perfil-ini">?</i>
+          <div><b id="perfil-nombre">—</b><span id="perfil-rol" class="rol-chip">Ciudadano</span></div>
+        </div>
+        <p class="ayuda" id="perfil-nota">Tus reportes quedan asociados a tu cuenta y los verás también si ingresas desde otro teléfono.</p>
+        <a id="perfil-panel" class="btn-sec enlace-panel" href="/panel/" hidden>Abrir el panel del centro de operaciones</a>
+        <button type="button" id="c-salir" class="btn-sec salir-c"><svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#salir-cuenta"></use></svg>Cerrar sesión</button>
+      </div>
+    </div>
+  </section>
+
+  <nav id="nav" class="nav" aria-label="Secciones">
+    <button type="button" data-ir="inicio" aria-current="page"><svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#inicio"></use></svg><span>Inicio</span></button>
+    <button type="button" data-ir="reportes"><svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#reportes"></use></svg><span>Mis reportes</span><i id="b-reportes" class="insignia" hidden></i></button>
+    <button type="button" data-ir="avisos"><svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#avisos"></use></svg><span>Avisos</span><i id="b-avisos" class="insignia" hidden></i></button>
+    <button type="button" data-ir="cuenta"><svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#cuenta"></use></svg><span>Cuenta</span></button>
+  </nav>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <div id="exito" class="exito" hidden aria-live="assertive">
+    <svg viewBox="0 0 80 80" aria-hidden="true"><circle cx="40" cy="40" r="34"/><path d="M24 41l11 11 21-24"/></svg>
+    <b id="exito-txt">Reporte enviado</b>
+    <small>El centro de operaciones ya lo puede ver.</small>
+  </div>
+  <script src="/vendor/leaflet/leaflet.js"></script>
+  <script src="/compartido/ojo.js"></script>
+  <script src="app.js"></script>
+  <script src="recorrido.js"></script>
+</body>
+</html>
