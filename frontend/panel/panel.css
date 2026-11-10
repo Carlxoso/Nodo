@@ -99,7 +99,7 @@ aside h2 { font-size: 15px; font-weight: 600; margin: 14px 0 8px; }
 @media (max-width: 720px) { .login-caja { grid-template-columns: 1fr; } .login-marca { padding: 22px 24px; flex-direction: row; align-items: center; flex-wrap: wrap; } .login-marca ul { display: none; } .login-marca p { margin: 0; } .login-marca img { width: 44px; height: 44px; margin: 0 12px 0 0; } .login form { padding: 24px; } }
 .error { color: var(--p-critica); min-height: 1.3em; margin-top: 8px; font-size: 13.5px; }
 
-@media (max-width: 800px) { main { flex-direction: column-reverse; } aside { width: auto; max-height: 42%; border-right: 0; border-top: 1px solid var(--linea); } .aviso { display: none; } }
+@media (max-width: 800px) { .divisor { display: none; } main { flex-direction: column-reverse; } aside { width: auto !important; max-height: 42%; border-right: 0; border-top: 1px solid var(--linea); } .aviso { display: none; } }
 
 /* Aviso de caso nuevo: un pulso breve que se repite dos veces */
 .caso.nuevo { animation: destello 1.4s ease-out 2; border-color: var(--marea); }
@@ -416,3 +416,11 @@ details.det .verif-fila { font-size: 12px; margin-top: 3px; }
 
 .chip.peligro-chip { background: #FFF1CF; color: #7A5200; border: 1px solid #F2C46D; font-weight: 600; }
 .chip.peligro-chip .ic { width: 14px; height: 14px; }
+
+/* Divisor para ajustar el ancho del menú lateral */
+.divisor { flex: none; width: 8px; margin-left: -4px; margin-right: -4px; position: relative; z-index: 900; cursor: col-resize; touch-action: none; }
+.divisor::after { content: ''; position: absolute; top: 50%; left: 50%; width: 4px; height: 44px; transform: translate(-50%, -50%); border-radius: 4px; background: var(--linea-2); transition: background-color .15s, height .15s; }
+.divisor:hover::after, .divisor:focus-visible::after, .divisor.arrastrando::after { background: var(--marea); height: 64px; }
+.divisor:focus-visible { outline: none; }
+body.redimensionando { cursor: col-resize; user-select: none; }
+body.redimensionando #mapa { pointer-events: none; }

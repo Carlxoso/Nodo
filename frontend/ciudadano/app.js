@@ -392,7 +392,7 @@ $('#pg-enviar').onclick = async () => {
 };
 
 // ---------- Eliminar reportes de «Mis reportes» ----------
-// Un reporte aún sin enviar se cancela del todo. Uno ya enviado solo se quita de este teléfono: el centro de operaciones conserva el caso.
+// Un reporte aún sin enviar se cancela del todo. Uno ya enviado se cancela también en el servidor (sale del panel), salvo que ya esté atendido.
 const BORRADOS = 'nodo_borrados';
 const borrados = () => { try { return new Set(JSON.parse(localStorage.getItem(BORRADOS) || '[]')); } catch { return new Set(); } };
 const recordarBorrado = (u) => { try { const s = borrados(); s.add(u); localStorage.setItem(BORRADOS, JSON.stringify([...s].slice(-300))); } catch {} };
@@ -406,10 +406,27 @@ $('#lista').addEventListener('click', async (e) => {
     return;
   }
   const li = b.closest('li'), uuid = b.dataset.uuid, pendiente = b.dataset.estado === 'pendiente';
+  // Un reporte ya enviado se cancela también en el servidor (desaparece del panel); si ya fue atendido, solo se quita de aquí.
+  let cancelado = false;
+  if (!pendiente) {
+    const rep = (await todos()).find((x) => x.uuid === uuid);
+    if (rep && rep.estado_local === 'enviado' && rep.estado_servidor !== 'atendido') {
+      try {
+        const h = cabeceras(); h['X-Dispositivo'] = dispositivoId() || '';
+        const res = await fetch('/api/reportes/' + uuid, { method: 'DELETE', headers: h });
+        if (res.ok || res.status === 404) cancelado = true;
+        else if (res.status !== 409) throw new Error(String(res.status));
+      } catch {
+        li.classList.remove('saliendo');
+        aviso('No se pudo cancelar el reporte. Revisa tu conexión e intenta de nuevo.');
+        return;
+      }
+    }
+  }
   li.classList.add('saliendo');
   await new Promise((r) => setTimeout(r, 260));
   await borrar(uuid); recordarBorrado(uuid);
-  aviso(pendiente ? 'Reporte cancelado: no se enviará.' : 'Reporte eliminado de tu teléfono.');
+  aviso(pendiente ? 'Reporte cancelado: no se enviará.' : cancelado ? 'Reporte cancelado: el centro de operaciones ya no lo verá.' : 'Reporte eliminado de tu teléfono.');
   await pintarLista();
 });
 

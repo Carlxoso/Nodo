@@ -68,6 +68,15 @@ class Api {
     return jsonDecode(r.body) as Map<String, dynamic>;
   }
 
+  /// Cancela un reporte propio en el servidor (desaparece del panel). Solo lo puede quien lo creó y mientras no esté atendido.
+  /// Devuelve true si quedó cancelado (o ya no existía) y false si ya estaba atendido; si falla, lanza ApiError.
+  static Future<bool> cancelarReporte(String uuid, String dispositivo) async {
+    final r = await http.delete(Uri.parse('${Config.baseUrl}/api/reportes/$uuid'), headers: {..._json, 'X-Dispositivo': dispositivo}).timeout(_t);
+    if (r.statusCode == 200 || r.statusCode == 404) return true;
+    if (r.statusCode == 409) return false;
+    throw ApiError(_errorDe(r, 'No se pudo cancelar el reporte.'), r.statusCode);
+  }
+
   static Future<List<Aviso>> avisos() async {
     final r = await http.get(Uri.parse('${Config.baseUrl}/api/alertas')).timeout(_t);
     if (r.statusCode != 200) throw ApiError('sin avisos', r.statusCode);

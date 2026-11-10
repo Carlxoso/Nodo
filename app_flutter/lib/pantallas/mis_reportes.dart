@@ -101,11 +101,14 @@ class _Fila extends StatelessWidget {
                 context: context,
                 builder: (c) => AlertDialog(
                   title: Text(pendiente ? '¿Cancelar este reporte?' : '¿Eliminar este reporte?'),
-                  content: Text(pendiente ? 'Aún no se envió. Si lo cancelas, no llegará al centro de operaciones.' : 'Se quitará de tu teléfono. El centro de operaciones conserva el caso.'),
-                  actions: [TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('No')), FilledButton(onPressed: () => Navigator.pop(c, true), style: FilledButton.styleFrom(backgroundColor: C.critica), child: Text(pendiente ? 'Cancelar envío' : 'Eliminar'))],
+                  content: Text(pendiente ? 'Aún no se envió. Si lo cancelas, no llegará al centro de operaciones.' : (r.estadoServidor == 'atendido' ? 'Se quitará de tu teléfono. Este reporte ya fue atendido.' : 'Se cancelará tu petición y el centro de operaciones ya no la verá.')),
+                  actions: [TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('No')), FilledButton(onPressed: () => Navigator.pop(c, true), style: FilledButton.styleFrom(backgroundColor: C.critica), child: Text(pendiente ? 'Cancelar envío' : (r.estadoServidor == 'atendido' ? 'Eliminar' : 'Cancelar reporte')))],
                 ),
               );
-              if (ok == true) await almacen.eliminar(r.uuid);
+              if (ok == true) {
+                final error = await almacen.eliminar(r.uuid);
+                if (error != null && context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+              }
             },
           ),
         ]),

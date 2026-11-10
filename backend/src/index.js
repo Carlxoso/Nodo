@@ -475,6 +475,37 @@ app.get('/api/reportes/:uuid', async (req, res) => {
   }
 });
 
+// La persona cancela su propio reporte: se borra del servidor y desaparece del panel.
+// Solo lo puede hacer quien lo creó (el mismo teléfono —cabecera X-Dispositivo— o la misma cuenta) y mientras no esté atendido.
+app.delete('/api/reportes/:uuid', autenticarOpcional, async (req, res) => {
+  if (!UUID_RE.test(req.params.uuid)) return res.status(400).json({ error: 'uuid inválido' });
+  const disp = req.get('x-dispositivo');
+  const cli = await pool.connect();
+  let fila;
+  try {
+    await cli.query('BEGIN');
+    const q = await cli.query('SELECT id, estado, foto, dispositivo, usuario_id FROM incidentes WHERE uuid_cliente = $1 FOR UPDATE', [req.params.uuid]);
+    if (!q.rows.length) { await cli.query('ROLLBACK'); return res.status(404).json({ error: 'no encontrado' }); }
+    fila = q.rows[0];
+    const esDueno = (req.usuario && fila.usuario_id != null && fila.usuario_id === req.usuario.id)
+      || (disp && UUID_RE.test(disp) && fila.dispositivo && fila.dispositivo.toLowerCase() === disp.toLowerCase());
+    if (!esDueno) { await cli.query('ROLLBACK'); return res.status(403).json({ error: 'solo quien hizo el reporte puede cancelarlo' }); }
+    if (fila.estado === 'atendido') { await cli.query('ROLLBACK'); return res.status(409).json({ error: 'este reporte ya fue atendido' }); }
+    await cli.query('DELETE FROM familias WHERE incidente_id = $1', [fila.id]);
+    await cli.query('DELETE FROM incidentes WHERE id = $1', [fila.id]);
+    await cli.query('COMMIT');
+  } catch (e) {
+    await cli.query('ROLLBACK').catch(() => {});
+    console.error(e);
+    return res.status(500).json({ error: 'error interno' });
+  } finally { cli.release(); }
+  if (fila.foto && /^\/uploads\/[0-9a-f-]+\.jpg$/.test(fila.foto)) fs.unlink(path.join(UPLOADS, path.basename(fila.foto)), () => {});
+  await auditar(pool, req.usuario ? req.usuario.id : null, 'cancelado_por_ciudadano', 'incidente', fila.id);
+  try { await verificarTodos(); await recalcular(); } catch (e) { console.error(e); }
+  publicar({ tipo: 'incidente_eliminado', id: fila.id, cancelado: true });
+  res.json({ ok: true });
+});
+
 // Crear reporte ciudadano. uuid_cliente evita duplicados cuando la PWA reenvía tras estar offline.
 app.post('/api/incidentes', autenticarOpcional, async (req, res) => {
   const { uuid_cliente, tipo, descripcion, lat, lon, gravedad, personas_afectadas, reportado_en, foto, dispositivo, sos, peligro, tramo } = req.body || {};

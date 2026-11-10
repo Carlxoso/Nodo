@@ -1108,6 +1108,7 @@ function conectarWS() {
     let m; try { m = JSON.parse(e.data); } catch { return; }
     if (m.tipo === 'listo') { wsActivo = true; wsEspera = 1000; cargar(); return; }
     if (m.tipo === 'incidente_nuevo') nuevoId = m.id;
+    if (m.cancelado) avisoCancelado();
     cargar();
   };
   ws.onclose = (e) => {
@@ -1120,3 +1121,65 @@ function conectarWS() {
 // Respaldo: si el WebSocket cae, se consulta cada 10 s; con WebSocket activo, una vez por minuto por seguridad
 setInterval(() => { if (token && !ws) conectarWS(); if (!wsActivo || ++tic % 6 === 0) cargar(); }, 10000);
 conectarWS();
+
+// ---------- Ancho ajustable del menú lateral (arrastrar el borde; doble clic = ancho original) ----------
+(() => {
+  const lateral = document.getElementById('lateral');
+  if (!lateral) return;
+  const CLAVE = 'nodo_ancho_lateral', ORIGINAL = 420, MIN = 300;
+  const maximo = () => Math.max(MIN, Math.min(820, Math.round(window.innerWidth * 0.7)));
+  const limitar = (n) => Math.max(MIN, Math.min(maximo(), Math.round(n)));
+  const div = document.createElement('div');
+  div.className = 'divisor';
+  div.setAttribute('role', 'separator');
+  div.setAttribute('aria-orientation', 'vertical');
+  div.setAttribute('aria-label', 'Ajustar el ancho del menú (arrastra o usa las flechas)');
+  div.tabIndex = 0;
+  div.title = 'Arrastra para ajustar el ancho · doble clic para restablecer';
+  lateral.after(div);
+  let pendiente = false;
+  const aplicar = (n, guardar) => {
+    const ancho = limitar(n);
+    lateral.style.width = ancho + 'px';
+    div.setAttribute('aria-valuenow', String(ancho));
+    if (!pendiente) { pendiente = true; requestAnimationFrame(() => { pendiente = false; mapa.invalidateSize(); }); }
+    if (guardar) { try { localStorage.setItem(CLAVE, String(ancho)); } catch {} }
+  };
+  try { const g = Number(localStorage.getItem(CLAVE)); if (g) aplicar(g, false); } catch {}
+  let x0 = 0, w0 = 0;
+  div.addEventListener('pointerdown', (e) => {
+    x0 = e.clientX; w0 = lateral.getBoundingClientRect().width;
+    div.setPointerCapture(e.pointerId); div.classList.add('arrastrando'); document.body.classList.add('redimensionando');
+    e.preventDefault();
+  });
+  div.addEventListener('pointermove', (e) => { if (div.hasPointerCapture(e.pointerId)) aplicar(w0 + e.clientX - x0, false); });
+  const fin = (e) => {
+    if (!div.hasPointerCapture(e.pointerId)) return;
+    div.releasePointerCapture(e.pointerId); div.classList.remove('arrastrando'); document.body.classList.remove('redimensionando');
+    aplicar(lateral.getBoundingClientRect().width, true);
+  };
+  div.addEventListener('pointerup', fin);
+  div.addEventListener('pointercancel', fin);
+  div.addEventListener('dblclick', () => aplicar(ORIGINAL, true));
+  div.addEventListener('keydown', (e) => {
+    const paso = e.shiftKey ? 60 : 20, w = lateral.getBoundingClientRect().width;
+    if (e.key === 'ArrowLeft') { aplicar(w - paso, true); e.preventDefault(); }
+    else if (e.key === 'ArrowRight') { aplicar(w + paso, true); e.preventDefault(); }
+    else if (e.key === 'Home') { aplicar(ORIGINAL, true); e.preventDefault(); }
+  });
+  window.addEventListener('resize', () => { if (lateral.style.width) aplicar(parseFloat(lateral.style.width), false); });
+})();
+
+
+// Aviso breve cuando una persona cancela su propio reporte (el caso desaparece de la lista)
+function avisoCancelado() {
+  let t = document.getElementById('aviso-cancelado');
+  if (!t) {
+    t = document.createElement('div'); t.id = 'aviso-cancelado'; t.setAttribute('role', 'status');
+    t.style.cssText = 'position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:3000;background:#14263A;color:#fff;padding:10px 16px;border-radius:10px;font:600 14px var(--fuente);box-shadow:0 6px 20px rgba(0,0,0,.3);transition:opacity .25s;opacity:0;pointer-events:none';
+    document.body.appendChild(t);
+  }
+  t.textContent = 'Una persona canceló su reporte: el caso se quitó de la lista.';
+  t.style.opacity = '1';
+  clearTimeout(t._t); t._t = setTimeout(() => { t.style.opacity = '0'; }, 5000);
+}

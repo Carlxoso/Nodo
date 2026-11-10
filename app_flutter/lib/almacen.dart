@@ -130,13 +130,29 @@ class Almacen extends ChangeNotifier {
   // Uno sin enviar se cancela del todo. Uno ya enviado solo se quita de este teléfono: el centro de operaciones conserva el caso.
   Set<String> _borrados() => (_p.getStringList('nodo_borrados') ?? <String>[]).toSet();
 
-  Future<void> eliminar(String uuid) async {
+  /// Quita el reporte de «Mis reportes». Si ya se envió y no está atendido, también lo cancela en el servidor (sale del panel).
+  /// Devuelve un texto de error si no se pudo cancelar (el reporte se conserva), o null si todo salió bien.
+  Future<String?> eliminar(String uuid) async {
+    final idx = reportes.indexWhere((r) => r.uuid == uuid);
+    if (idx >= 0) {
+      final r = reportes[idx];
+      if (r.estadoLocal == 'enviado' && r.estadoServidor != 'atendido') {
+        try {
+          await Api.cancelarReporte(uuid, _dispositivoId());
+        } on ApiError catch (e) {
+          return e.codigo == null ? 'No se pudo cancelar. Revisa tu conexión e intenta de nuevo.' : e.mensaje;
+        } catch (_) {
+          return 'No se pudo cancelar. Revisa tu conexión e intenta de nuevo.';
+        }
+      }
+    }
     reportes.removeWhere((r) => r.uuid == uuid);
     final b = _borrados()..add(uuid);
     final lista = b.toList();
     await _p.setStringList('nodo_borrados', lista.length > 300 ? lista.sublist(lista.length - 300) : lista);
     await _guardar();
     notifyListeners();
+    return null;
   }
 
   // ---------- Cuenta (opcional) ----------
