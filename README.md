@@ -22,17 +22,5 @@ data/escenario      Datos del «Jueves 06:00» (GeoJSON/SQL, todo simulado)
 docs/               Arquitectura, modelo ER, manual, bocetos
 ```
 
-## Arranque rápido
-```bash
-cp .env.example .env      # edita contraseñas y claves
-docker compose up -d      # levanta PostgreSQL + PostGIS
-docker compose ps         # debe aparecer "healthy"
-```
-
-## Reglas del proyecto
-- Todo dato simulado se etiqueta como simulado; no se suben datos reales de personas.
-- Una rama por funcionalidad, commits pequeños, `main` siempre funcional.
-- **Code Freeze: martes 10 de noviembre, 13:00.**
-
 ## Estado
 Ver [docs/PLAN.md](docs/PLAN.md).
