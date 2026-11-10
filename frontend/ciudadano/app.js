@@ -7,8 +7,12 @@ const ico = (nombre) => `<svg class="ic" aria-hidden="true" focusable="false"><u
 
 // Cada tipo tiene su pictograma y su color, como un letrero de seguridad
 const TIPOS = [
-  { v: 'rescate', n: 'Necesito rescate', i: 'rescate', c: 'var(--p-critica)', ancho: true },
+  { v: 'rescate', n: 'Necesito rescate', i: 'rescate', c: 'var(--p-critica)', oculto: true }, // solo lo usa el botón SOS
   { v: 'inundacion', n: 'Inundación', i: 'inundacion', c: '#2E6FD0' },
+  { v: 'terremoto', n: 'Terremoto', i: 'terremoto', c: '#7A4B9B' },
+  { v: 'tsunami', n: 'Tsunami', i: 'tsunami', c: '#0E7C86' },
+  { v: 'incendio', n: 'Incendio', i: 'incendio', c: '#D9480F' },
+  { v: 'derrumbe', n: 'Derrumbe', i: 'derrumbe', c: '#6D4C41' },
   { v: 'deslizamiento', n: 'Deslizamiento', i: 'deslizamiento', c: '#8A5A2B' },
   { v: 'via_cortada', n: 'Vía cortada', i: 'via-cortada', c: 'var(--p-alta)' },
   { v: 'otro', n: 'Otro problema', i: 'otro', c: 'var(--tinta-2)' },
@@ -122,7 +126,7 @@ const todos = () => tx('readonly', (s) => s.getAll());
 
 // ---------- Formulario ----------
 function pintarBotones() {
-  $('#tipos').innerHTML = TIPOS.map((t) => `<button type="button" data-v="${t.v}" aria-pressed="false" class="${t.ancho ? 'ancho' : ''}" style="--t:${t.c};--k:${TIPOS.indexOf(t)}"><span class="sello">${ico(t.i)}</span><span>${t.n}</span><i class="marca-ok" aria-hidden="true">${ico('ok')}</i></button>`).join('');
+  $('#tipos').innerHTML = TIPOS.filter((t) => !t.oculto).map((t) => `<button type="button" data-v="${t.v}" aria-pressed="false" class="${t.ancho ? 'ancho' : ''}" style="--t:${t.c};--k:${TIPOS.indexOf(t)}"><span class="sello">${ico(t.i)}</span><span>${t.n}</span><i class="marca-ok" aria-hidden="true">${ico('ok')}</i></button>`).join('');
   $('#gravedades').innerHTML = GRAV.map((g, i) => `<button type="button" data-v="${i + 1}" aria-pressed="${i + 1 === gravedad}" aria-label="${i + 1} de 5, ${g.toLowerCase()}" style="--c:${GRAV_COLOR[i]};--i:${i}">${i + 1}</button>`).join('');
   pintarGravedad();
 }
@@ -145,7 +149,15 @@ $('#gravedades').addEventListener('click', (e) => {
   gravedad = Number(b.dataset.v);
   pintarGravedad();
 });
-function bumpPersonas() { const o = $('#personas'); o.textContent = personas; o.classList.remove('bump'); void o.offsetWidth; o.classList.add('bump'); }
+function bumpPersonas() { const o = $('#personas'); o.value = String(personas); o.classList.remove('bump'); void o.offsetWidth; o.classList.add('bump'); }
+// Para una emergencia rápida: se puede escribir la cifra con el teclado numérico (además de los botones + y −)
+$('#personas').addEventListener('input', (e) => {
+  const limpio = e.target.value.replace(/\D/g, '').slice(0, 3);
+  personas = limpio === '' ? 0 : Number(limpio);
+  if (e.target.value !== limpio) e.target.value = limpio;
+});
+$('#personas').addEventListener('focus', (e) => { const o = e.target; setTimeout(() => { try { o.select(); } catch {} }, 0); });
+$('#personas').addEventListener('blur', (e) => { e.target.value = String(personas); });
 $('#mas').onclick = () => { personas = Math.min(999, personas + 1); bumpPersonas(); };
 $('#menos').onclick = () => { personas = Math.max(0, personas - 1); bumpPersonas(); };
 
@@ -178,6 +190,7 @@ function irA(v) {
   try { if (v !== 'nuevo') history.replaceState(null, '', v === 'inicio' ? location.pathname + location.search : '#' + v); } catch {}
 }
 function irPaso(n, atras) {
+  if (esSOS && n < 3) n = 3; // bloqueo: en SOS no se vuelve a los pasos 1 y 2
   paso = n;
   document.querySelectorAll('.pano').forEach((p) => {
     p.hidden = Number(p.dataset.p) !== n;
@@ -205,11 +218,24 @@ function nuevoReporte(t, g, saltar) {
   tipo = t; if (g) gravedad = g;
   document.querySelectorAll('#tipos button').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.v === tipo)));
   pintarGravedad(); irA('nuevo'); irPaso(saltar ? 3 : 1);
+  pintarModoSOS(false);
+}
+// En SOS el formulario va directo al paso 3 y no se puede volver a los pasos 1 y 2: es la máxima urgencia.
+// Si se activó sin querer, la flecha de volver cancela y lleva al menú principal.
+function pintarModoSOS(on) {
+  $('#v-nuevo').classList.toggle('modo-sos', on);
+  $('#titulo-nuevo').textContent = on ? 'SOS · Pedir ayuda' : 'Nuevo reporte';
+  $('#atras').setAttribute('aria-label', on ? 'Cancelar el SOS y volver al menú principal' : 'Volver');
+}
+function activarSOS() { personas = 0; $('#personas').value = '0'; nuevoReporte('rescate', 4, true); esSOS = true; pintarModoSOS(true); }
+function cancelarSOS() { // vuelve al menú principal y deja el formulario limpio
+  tipo = null; esSOS = false; gravedad = 3; personas = 0;
+  $('#personas').value = '0'; pintarBotones(); pintarModoSOS(false); irPaso(1); irA('inicio');
 }
 $('#siguiente').onclick = () => { if (paso === 1 && !tipo) return; irPaso(paso + 1); };
-$('#atras').onclick = () => { if (paso > 1) irPaso(paso - 1, true); else irA('inicio'); };
+$('#atras').onclick = () => { if (esSOS) return cancelarSOS(); if (paso > 1) irPaso(paso - 1, true); else irA('inicio'); };
 $('#nav').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) irA(b.dataset.ir); });
-$('#sos').onclick = () => { nuevoReporte('rescate', 4, true); esSOS = true; };
+$('#sos').onclick = activarSOS;
 $('#atajos').innerHTML = TIPOS.filter((t) => t.v !== 'rescate').map((t, k) => `<button type="button" data-v="${t.v}" style="--t:${t.c};--k:${k}"><span class="sello" style="--t:${t.c}">${ico(t.i)}</span><span>${t.n}</span></button>`).join('');
 $('#atajos').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) nuevoReporte(b.dataset.v); });
 $('#mini-reintentar').onclick = () => ubicar();
@@ -288,8 +314,8 @@ $('#enviar').onclick = async () => {
   await guardar(r);
   // Reinicia el formulario
   tipo = null; personas = 0; foto = null; gravedad = 3; esSOS = false;
-  $('#personas').textContent = '0'; $('#descripcion').value = ''; $('#foto').value = ''; $('#preview').hidden = true; $('#foto-texto').textContent = 'Tomar o elegir una foto';
-  pintarBotones();
+  $('#personas').value = '0'; $('#descripcion').value = ''; $('#foto').value = ''; $('#preview').hidden = true; $('#foto-texto').textContent = 'Tomar o elegir una foto';
+  pintarBotones(); pintarModoSOS(false);
   $('#exito-txt').textContent = navigator.onLine ? 'Reporte enviado' : 'Guardado en tu teléfono';
   $('#exito').hidden = false;
   await pintarLista();
@@ -393,7 +419,7 @@ $('#btn-peligro').onclick = () => { irA('peligro'); pgIniciarMapa(); if (!pos) u
 $('#pg-atras').onclick = () => irA('inicio');
 $('#pg-gps').onclick = ubicar;
 $('#pg-demo').onclick = () => $('#btn-demo').click();
-$('#pg-sos').onclick = () => { nuevoReporte('rescate', 4, true); esSOS = true; };
+$('#pg-sos').onclick = activarSOS;
 $('#pg-foto').addEventListener('change', async (e) => {
   const f = e.target.files[0]; pgFoto = null; $('#pg-preview').hidden = true; $('#pg-foto-texto').textContent = 'Agregar una foto (opcional)';
   if (!f) return;

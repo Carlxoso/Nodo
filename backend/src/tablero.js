@@ -16,6 +16,9 @@ function recursosSugeridos(casos) {
       if (c.personas_afectadas >= 50) sumar('Ayuda humanitaria (agua y alimentos)', 'Más de 50 personas afectadas en un caso', c);
     }
     if (c.tipo === 'deslizamiento') sumar('Maquinaria para despejar la vía', 'Deslizamientos', c);
+    if (c.tipo === 'incendio') sumar('Bomberos y control de incendios', 'Incendios', c);
+    if (c.tipo === 'terremoto' || c.tipo === 'tsunami') sumar('Equipo de rescate y ambulancia', 'Terremoto o tsunami', c);
+    if (c.tipo === 'derrumbe') sumar('Maquinaria para despejar la vía', 'Derrumbes', c);
     if (c.tipo === 'via_cortada') sumar('Cuadrilla vial y desvío de tránsito', 'Vías cortadas', c);
     if (/agua|medic/.test(d)) sumar('Agua potable y medicinas', 'Pedidos de agua o medicinas', c);
   }

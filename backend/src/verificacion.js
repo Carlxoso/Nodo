@@ -41,6 +41,18 @@ async function migrar() {
     ADD COLUMN IF NOT EXISTS peligro BOOLEAN NOT NULL DEFAULT false,
     ADD COLUMN IF NOT EXISTS tramo JSONB,
     ADD COLUMN IF NOT EXISTS recibido_en TIMESTAMPTZ`);
+  // Tipos de siniestro nuevos: si la restricción vieja no los admite, se reemplaza
+  await pool().query(`DO $$
+    DECLARE c TEXT;
+    BEGIN
+      SELECT conname INTO c FROM pg_constraint
+        WHERE conrelid = 'incidentes'::regclass AND contype = 'c' AND pg_get_constraintdef(oid) LIKE '%via_cortada%' AND pg_get_constraintdef(oid) NOT LIKE '%terremoto%';
+      IF c IS NOT NULL THEN
+        EXECUTE format('ALTER TABLE incidentes DROP CONSTRAINT %I', c);
+        ALTER TABLE incidentes ADD CONSTRAINT incidentes_tipo_check
+          CHECK (tipo IN ('inundacion','deslizamiento','via_cortada','rescate','otro','terremoto','tsunami','incendio','derrumbe'));
+      END IF;
+    END $$`);
 }
 
 // Recalcula la confianza de un reporte ciudadano. Devuelve los ids de reportes vecinos (para recalcularlos también).

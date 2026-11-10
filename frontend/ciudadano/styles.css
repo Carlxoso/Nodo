@@ -53,8 +53,9 @@ textarea:focus { outline: 0; border-color: var(--marea); background: #fff; box-s
 .paso button { display: grid; place-items: center; width: 50px; height: 50px; border-radius: 50%; border: 1.5px solid var(--linea-2); background: var(--superficie); color: var(--tinta); cursor: pointer; transition: background-color .2s, transform .2s var(--rebote), border-color .2s; }
 .paso button:hover { background: var(--marea-claro); border-color: var(--marea); }
 .paso button:active { transform: scale(.86); }
-.paso output { min-width: 44px; text-align: center; font-size: 30px; font-weight: 600; }
-.paso output.bump { animation: bump .3s var(--rebote); }
+.paso input { width: 84px; min-width: 44px; height: 50px; text-align: center; font: inherit; font-size: 30px; font-weight: 600; color: var(--tinta); background: var(--superficie); border: 1.5px solid var(--linea-2); border-radius: 14px; padding: 0; }
+.paso input:focus { outline: 3px solid color-mix(in srgb, var(--marea) 35%, transparent); border-color: var(--marea); }
+.paso input.bump { animation: bump .3s var(--rebote); }
 @keyframes bump { 40% { transform: scale(1.3); color: var(--marea); } }
 .boton-foto { display: inline-flex; align-items: center; gap: 10px; padding: 13px 16px; border: 1.5px dashed var(--linea-2); border-radius: 12px; color: var(--marea); font-weight: 600; cursor: pointer; transition: background-color .2s, border-color .2s, transform .15s; }
 .boton-foto:hover { background: var(--marea-claro); border-color: var(--marea); }
@@ -411,3 +412,9 @@ body[data-vista="cuenta"] .alerta { display: none; }
 .notif-aviso[hidden] { display: none; }
 .notif-aviso .ic { width: 20px; height: 20px; color: var(--marea); flex: none; }
 .notif-aviso span { flex: 1 1 200px; }
+
+/* SOS: no se puede volver a los pasos 1 y 2 */
+.sos-aviso { display: none; align-items: flex-start; gap: 10px; margin: 10px 16px 0; padding: 10px 12px; border-radius: 12px; background: #FBEAE8; color: #8E1B10; font-size: 14px; font-weight: 600; line-height: 1.35; border: 1.5px solid #E7B4AE; }
+.sos-aviso .ic { width: 20px; height: 20px; flex: none; margin-top: 1px; }
+.modo-sos .sos-aviso { display: flex; }
+.modo-sos .etapas { display: none; }

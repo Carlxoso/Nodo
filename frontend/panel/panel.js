@@ -11,8 +11,8 @@ const BANDAS = [
   { min: 0, n: 'Baja', s: 'bajo', pl: 'bajos', c: '#2F7D5B' },
 ];
 const banda = (p) => BANDAS.find((b) => (p || 0) >= b.min);
-const TIPO_ICO = { inundacion: 'inundacion', deslizamiento: 'deslizamiento', via_cortada: 'via-cortada', rescate: 'rescate', otro: 'otro' };
-const TIPO_NOMBRE = { inundacion: 'Inundación', deslizamiento: 'Deslizamiento', via_cortada: 'Vía cortada', rescate: 'Rescate', otro: 'Otro' };
+const TIPO_ICO = { inundacion: 'inundacion', deslizamiento: 'deslizamiento', via_cortada: 'via-cortada', rescate: 'rescate', otro: 'otro', terremoto: 'terremoto', tsunami: 'tsunami', incendio: 'incendio', derrumbe: 'derrumbe' };
+const TIPO_NOMBRE = { inundacion: 'Inundación', deslizamiento: 'Deslizamiento', via_cortada: 'Vía cortada', rescate: 'Rescate', otro: 'Otro', terremoto: 'Terremoto', tsunami: 'Tsunami', incendio: 'Incendio', derrumbe: 'Derrumbe' };
 const ESTADOS = [['pendiente', 'Pendiente'], ['en_proceso', 'En proceso'], ['atendido', 'Atendido']];
 const ESTADO_NOMBRE = Object.fromEntries(ESTADOS);
 
@@ -167,7 +167,7 @@ function verificacionHtml(p) {
 }
 // ---------- Unidades asignadas a un caso ----------
 const UNIDADES = { bomberos: ['Bomberos', 'bomberos'], ambulancia: ['Ambulancia', 'salud'], rescate: ['Equipo de rescate', 'rescate'], maquinaria: ['Maquinaria vial', 'via-cortada'], achique: ['Bomba de achique', 'agua'] };
-const UNIDAD_SUGERIDA = { rescate: 'rescate', inundacion: 'achique', deslizamiento: 'maquinaria', via_cortada: 'maquinaria', otro: 'ambulancia' };
+const UNIDAD_SUGERIDA = { rescate: 'rescate', inundacion: 'achique', deslizamiento: 'maquinaria', via_cortada: 'maquinaria', otro: 'ambulancia', terremoto: 'rescate', tsunami: 'rescate', incendio: 'bomberos', derrumbe: 'maquinaria' };
 const ASIG_ESTADO = { en_camino: 'En camino', en_sitio: 'En el sitio' };
 const unidadNombre = (a) => (UNIDADES[a.unidad] ? UNIDADES[a.unidad][0] : a.unidad) + (a.nombre ? ` ${a.nombre}` : '');
 function unidadesChips(p) {

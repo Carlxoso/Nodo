@@ -2,7 +2,7 @@
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const BANDAS = [{ min: 75, n: 'Crítica', c: '#B42318' }, { min: 50, n: 'Alta', c: '#D1571F' }, { min: 25, n: 'Media', c: '#B7791F' }, { min: 0, n: 'Baja', c: '#2F7D5B' }];
 const banda = (p) => BANDAS.find((b) => (p || 0) >= b.min);
-const TIPO = { inundacion: 'Inundación', deslizamiento: 'Deslizamiento', via_cortada: 'Vía cortada', rescate: 'Rescate', otro: 'Otro' };
+const TIPO = { inundacion: 'Inundación', deslizamiento: 'Deslizamiento', via_cortada: 'Vía cortada', rescate: 'Rescate', otro: 'Otro', terremoto: 'Terremoto', tsunami: 'Tsunami', incendio: 'Incendio', derrumbe: 'Derrumbe' };
 const ESTADO = { pendiente: 'Pendiente', en_proceso: 'En proceso', atendido: 'Atendido' };
 const FUENTE = { ciudadano: 'Ciudadano', simulado: 'Simulado', oficial: 'Oficial' };
 const UNIDAD = { bomberos: 'Bomberos', ambulancia: 'Ambulancia', rescate: 'Equipo de rescate', maquinaria: 'Maquinaria vial', achique: 'Bomba de achique' };

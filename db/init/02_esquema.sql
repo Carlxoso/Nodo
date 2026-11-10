@@ -48,7 +48,7 @@ CREATE TABLE incidentes (
   id                  SERIAL PRIMARY KEY,
   uuid_cliente        UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(), -- evita duplicados al sincronizar offline
   usuario_id          INT REFERENCES usuarios(id),
-  tipo                TEXT NOT NULL CHECK (tipo IN ('inundacion','deslizamiento','via_cortada','rescate','otro')),
+  tipo                TEXT NOT NULL CHECK (tipo IN ('inundacion','deslizamiento','via_cortada','rescate','otro','terremoto','tsunami','incendio','derrumbe')),
   descripcion         TEXT,
   geom                geometry(Point,4326) NOT NULL,
   gravedad            INT NOT NULL DEFAULT 3 CHECK (gravedad BETWEEN 1 AND 5),

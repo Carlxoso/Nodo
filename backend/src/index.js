@@ -37,7 +37,7 @@ app.use('/uploads', express.static(UPLOADS));
 app.use('/vendor/leaflet', express.static(path.join(__dirname, '..', 'node_modules', 'leaflet', 'dist')));
 app.use(express.static(path.join(__dirname, '..', '..', 'frontend')));
 
-const TIPOS = ['inundacion', 'deslizamiento', 'via_cortada', 'rescate', 'otro'];
+const TIPOS = ['inundacion', 'deslizamiento', 'via_cortada', 'rescate', 'otro', 'terremoto', 'tsunami', 'incendio', 'derrumbe'];
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Unidades activas de cada caso, como arreglo JSON dentro de las propiedades del incidente
