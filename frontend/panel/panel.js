@@ -270,13 +270,16 @@ const unidadNombre = (a) => (UNIDADES[a.unidad] ? UNIDADES[a.unidad][0] : a.unid
 function unidadesChips(p) {
   return (p.asignaciones || []).map((a) => `<span class="chip unidad ${esc(a.estado)}">${ico(UNIDADES[a.unidad] ? UNIDADES[a.unidad][1] : 'otro')}${esc(unidadNombre(a))} · ${esc(ASIG_ESTADO[a.estado] || a.estado)}</span>`).join('');
 }
+const minDesde = (t) => Math.max(0, Math.round((Date.now() - new Date(t).getTime()) / 60000));
+const demoraUnidad = (a) => a.estado === 'en_camino' && a.asignada_en && minDesde(a.asignada_en) >= 15; // más de 15 min sin llegar: se marca en rojo
+const puedeQuitar = (a) => (usuarioActual && usuarioActual.rol === 'admin') || (a.estado === 'en_camino' && a.asignada_en && minDesde(a.asignada_en) < 3);
 function unidadesHtml(p) {
   const filas = (p.asignaciones || []).map((a) => `<div class="u-fila ${esc(a.estado)}">
     <span class="u-n">${ico(UNIDADES[a.unidad] ? UNIDADES[a.unidad][1] : 'otro')}<span>${esc(unidadNombre(a))}</span></span>
-    <span class="u-e">${esc(ASIG_ESTADO[a.estado] || a.estado)}</span>
+    <span class="u-e${demoraUnidad(a) ? ' demora' : ''}">${esc(ASIG_ESTADO[a.estado] || a.estado)}${a.estado === 'en_camino' && a.asignada_en ? ` · ${minDesde(a.asignada_en)} min` : ''}</span>
     <span class="u-bt">${a.estado === 'en_camino' ? `<button data-asig="${esc(a.id)}" data-asig-estado="en_sitio">Llegó</button>` : ''}
     <button data-asig="${esc(a.id)}" data-asig-estado="liberada">Liberar</button>
-    <button data-asig="${esc(a.id)}" data-asig-del="1" class="u-x" aria-label="Quitar esta asignación">${ico('cerrar')}</button></span></div>`).join('');
+    ${puedeQuitar(a) ? `<button data-asig="${esc(a.id)}" data-asig-del="1" class="u-x" title="Quitar (solo si fue un error)" aria-label="Quitar esta asignación por error">${ico('cerrar')}</button>` : ''}</span></div>`).join('');
   const rec = recomendar(p), pend = rec.find((x) => !x.hecha), pref = window._unidadPref && window._unidadPref.id === String(p.id) ? window._unidadPref.unidad : null;
   const sug = pref || (pend ? pend.unidad : (UNIDAD_SUGERIDA[p.tipo] || 'bomberos'));
   const recHtml = rec.length ? `<div class="rec-pop"><b>Recomendado enviar</b>${rec.map((x) => `<div class="rec-fila${x.hecha ? ' hecha' : ''}${x.apoyo ? ' apoyo' : ''}"><span class="rec-n">${x.hecha ? ico('ok-circulo') : ico(UNIDADES[x.unidad] ? UNIDADES[x.unidad][1] : 'otro')}${esc(unidadTxt(x.unidad))}</span><span class="rec-m">${x.hecha ? 'Ya asignada' : esc(x.motivo)}</span></div>`).join('')}</div>` : '';
@@ -320,10 +323,60 @@ async function previoDespacho(f) {
   } catch (err) { if (marca === f._m) prev.textContent = ''; }
 }
 const recibidoCaso = (p) => !!(p.recibido_en || p.estado !== 'pendiente' || (p.asignaciones || []).length);
+const puedeEliminar = (p) => (usuarioActual && usuarioActual.rol === 'admin') || (p.estado === 'pendiente' && !recibidoCaso(p));
+const CIERRES = [['resuelto', 'Resuelto'], ['resuelto_sin_unidad', 'Resuelto sin enviar unidad'], ['falsa_alarma', 'Falsa alarma'], ['duplicado', 'Reporte duplicado'], ['derivado', 'Derivado a otra institución']];
+const CIERRE_NOTA = { resuelto_sin_unidad: 'Explica qué pasó (obligatorio)', derivado: 'A quién se derivó (obligatorio)' };
+const CIERRE_NOMBRE = Object.fromEntries(CIERRES);
+// Flujo estricto: cada caso muestra solo lo que puede hacerse ahora (recibir, asignar, cerrar con motivo, reabrir con motivo)
 function accionesHtml(p) {
-  return `<div class="acciones">${recibidoCaso(p) ? '' : `<button class="recibir" data-recibido="${esc(p.id)}">${ico('ok-circulo')}Marcar recibido</button>`}${ESTADOS.filter(([v]) => v !== p.estado)
-    .map(([v, n]) => `<button data-id="${esc(p.id)}" data-estado="${v}">${n}</button>`).join('')}
-    <button class="peligro" data-eliminar="${esc(p.id)}" title="Eliminar caso" aria-label="Eliminar caso">${ico('eliminar')}<span class="t">¿Eliminar?</span></button></div>`;
+  const rec = recibidoCaso(p), act = p.asignaciones || [], enCamino = act.filter((a) => a.estado === 'en_camino').length, id = esc(p.id);
+  const el = puedeEliminar(p) ? `<button class="peligro" data-eliminar="${id}" title="Eliminar caso" aria-label="Eliminar caso">${ico('eliminar')}<span class="t">¿Eliminar?</span></button>` : '';
+  if (p.estado === 'atendido') {
+    return `<div class="flujo cerrado"><b>${ico('ok-circulo')}Caso cerrado: ${esc(CIERRE_NOMBRE[p.cierre_motivo] || 'Atendido')}</b>${p.cierre_nota ? `<span>${esc(p.cierre_nota)}</span>` : ''}</div>
+      <div class="acciones"><button data-abrir-form="reabrir">Reabrir…</button>${el}</div>
+      <div class="cierre-form" data-form="reabrir" hidden><textarea maxlength="300" rows="2" placeholder="¿Por qué se reabre? (obligatorio)" aria-label="Motivo para reabrir"></textarea>
+        <div class="cierre-err" role="alert"></div><div class="acciones"><button class="primario" data-reabrir="${id}">Reabrir caso</button><button data-cerrar-form>Cancelar</button></div></div>`;
+  }
+  const cur = !rec ? 0 : p.estado === 'en_proceso' ? 2 : 1; // 0 recibir, 1 asignar, 2 atender y cerrar
+  const pasos = ['Recibir', 'Asignar unidad', 'Atender y cerrar'].map((n, i) => `<li class="${i < cur ? 'hecho' : i === cur ? 'actual' : ''}">${n}</li>`).join('');
+  const ayuda = !rec ? 'Confirma que lo viste para avisar a la persona.' : !act.length ? 'Asigna una unidad para iniciar la atención.' : enCamino ? `${enCamino} unidad${enCamino > 1 ? 'es' : ''} en camino: márcala «Llegó» para poder cerrar.` : 'Cuando termine la atención, cierra el caso con su motivo.';
+  const llegaron = act.some((a) => a.estado === 'en_sitio');
+  const opts = CIERRES.map(([v, n]) => `<option value="${v}"${v === (llegaron ? 'resuelto' : 'falsa_alarma') ? ' selected' : ''}>${esc(n)}</option>`).join('');
+  return `<ol class="pasos-caso" aria-label="Avance del caso">${pasos}</ol><p class="flujo-ayuda">${esc(ayuda)}</p>
+    <div class="acciones">${rec ? '' : `<button class="recibir primario" data-recibido="${id}">${ico('ok-circulo')}Marcar recibido</button>`}<button data-abrir-form="cerrar">Cerrar caso…</button>${el}</div>
+    <div class="cierre-form" data-form="cerrar" hidden><select data-cierre-motivo aria-label="Motivo de cierre">${opts}</select>
+      <textarea maxlength="300" rows="2" placeholder="Nota (opcional)" aria-label="Nota de cierre"></textarea><div class="cierre-err" role="alert"></div>
+      <div class="acciones"><button class="primario" data-cerrar="${id}">Confirmar cierre</button><button data-cerrar-form>Cancelar</button></div></div>`;
+}
+// Bitácora y notas del caso (se carga al abrirla)
+const HIST_UNIDAD = (u) => (UNIDADES[u] ? UNIDADES[u][0] : u || 'unidad');
+function textoHist(h) {
+  switch (h.accion) {
+    case 'recibido': return 'Marcó el caso como recibido';
+    case 'estado': return `Pasó a «${ESTADO_NOMBRE[h.a] || h.a}»`;
+    case 'cerrar': return `Cerró el caso: ${CIERRE_NOMBRE[h.motivo] || h.motivo}`;
+    case 'reabrir': return 'Reabrió el caso';
+    case 'asignar': return `Asignó ${HIST_UNIDAD(h.a)}`;
+    case 'unidad_llego': return `${HIST_UNIDAD(h.a)} llegó al sitio`;
+    case 'unidad_liberada': return `Liberó ${HIST_UNIDAD(h.a)}`;
+    case 'unidad_cancelada': return `Canceló el envío de ${HIST_UNIDAD(h.a)}`;
+    case 'asignacion_quitada': return `Quitó la asignación de ${HIST_UNIDAD(h.a)} (error)`;
+    case 'nota': return 'Nota';
+    default: return h.accion;
+  }
+}
+function bitacoraHtml(p) {
+  return `<details class="bit" data-bit="${esc(p.id)}"><summary>Bitácora y notas</summary><div class="bit-c"><ul class="bit-lista" aria-live="polite"><li class="bit-vacio">Cargando…</li></ul>
+    <div class="bit-nueva"><input maxlength="300" placeholder="Agregar una nota para el turno" aria-label="Nueva nota"><button type="button" data-bit-nota="${esc(p.id)}">Agregar</button></div></div></details>`;
+}
+async function cargarBitacora(det, popup) {
+  const ul = det.querySelector('.bit-lista');
+  try {
+    const hs = await mandar(`/api/incidentes/${det.dataset.bit}/historial`, 'GET');
+    ul.innerHTML = hs.length ? hs.map((h) => `<li><time>${esc(new Date(h.creado_en).toLocaleString('es-EC', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }))}</time>
+      <span><b>${esc(textoHist(h))}</b>${h.nota ? `: ${esc(h.nota)}` : ''}<small>${esc(h.usuario || 'Sistema')}</small></span></li>`).join('') : '<li class="bit-vacio">Todavía no hay movimientos.</li>';
+  } catch (e) { if (e.message !== 'auth') ul.innerHTML = '<li class="bit-vacio">No se pudo cargar la bitácora.</li>'; }
+  if (popup && popup._map && popup._updateLayout) { popup._updateLayout(); popup._updatePosition(); }
 }
 // «Por qué esta prioridad» y «Cómo se verificó» van plegados para que el cuadro del caso sea corto
 function detalleHtml(p) {
@@ -338,7 +391,7 @@ function popupIncidente(p) {
     ${p.descripcion ? `<p>${esc(p.descripcion)}</p>` : ''}${foto}
     <div class="datos"><span class="chip">${ico('alerta')}Gravedad ${esc(p.gravedad)} de 5</span><span class="chip">${ico('personas')}${esc(p.personas_afectadas)} afectadas</span>
     <span class="chip"><i class="punto" style="--c:${FUENTE[p.fuente] || '#777'}"></i>${esc(FUENTE_NOMBRE[p.fuente] || p.fuente)}</span><span class="chip">Confianza ${esc(p.confianza)}</span></div>
-    ${duenoPopup(p)}${unidadesHtml(p)}${accionesHtml(p)}</div>`;
+    ${duenoPopup(p)}${unidadesHtml(p)}${accionesHtml(p)}${bitacoraHtml(p)}</div>`;
 }
 
 // Marcador en forma de pin (gota roja) con el ícono del tipo de caso; el tamaño indica la prioridad y el punto la fuente.
@@ -621,7 +674,7 @@ function filaCaso(p, porId) {
   activar(li, () => { const m = porId[p.id]; if (m) enfocar(m); });
   const rb = li.querySelector('button[data-recibido]');
   if (rb) { rb.onclick = (e) => { e.stopPropagation(); marcarRecibido(rb.dataset.recibido, rb); }; rb.onkeydown = (e) => e.stopPropagation(); }
-  li.append(botonEliminar(p.id));
+  if (puedeEliminar(p)) li.append(botonEliminar(p.id));
   return li;
 }
 
@@ -634,7 +687,7 @@ function filaMin(p, porId) {
   li.innerHTML = `<span class="min-prio num" style="--b:${b.c}">${esc(p.prioridad)}</span>${ico(TIPO_ICO[p.tipo] || 'otro')}
     <span class="min-txt"><b>${esc(TIPO_NOMBRE[p.tipo] || p.tipo)}</b> ${esc(p.descripcion || '')}</span>`;
   activar(li, () => { const m = porId[p.id]; if (m) enfocar(m); });
-  li.append(botonEliminar(p.id));
+  if (puedeEliminar(p)) li.append(botonEliminar(p.id));
   return li;
 }
 
@@ -703,16 +756,15 @@ async function marcarRecibido(id, btn) {
   try { await mandar(`/api/incidentes/${id}/recibido`, 'PATCH'); mapa.closePopup(); cargar(); }
   catch (e) { if (btn) btn.disabled = false; if (e.message !== 'auth') alert('No se pudo marcar como recibido. Intenta de nuevo.'); }
 }
-async function cambiarEstado(id, estado) {
+// Cierra o reabre un caso con su motivo; si el servidor rechaza (regla del flujo) el mensaje se muestra dentro del formulario
+async function cambiarEstado(id, cuerpo, errEl, btn) {
+  if (btn) btn.disabled = true; if (errEl) errEl.textContent = '';
   try {
-    const r = await fetch(`/api/incidentes/${id}/estado`, { method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify({ estado }) });
-    if (r.status === 401 || r.status === 403) { guardarToken(null); mostrarLogin(); return; }
-    if (!r.ok) throw new Error(r.status);
-    if (estado === 'atendido') { quitarRuta(); quitarRutaFijada(String(id)); } // el tramo marcado se quita al dar por atendido el caso
+    await mandar(`/api/incidentes/${id}/estado`, 'PATCH', cuerpo);
+    if (cuerpo.estado === 'atendido') { quitarRuta(); quitarRutaFijada(String(id)); } // el tramo marcado se quita al dar por atendido el caso
     mapa.closePopup();
     cargar();
-  } catch { alert('No se pudo cambiar el estado. Intenta de nuevo.'); }
+  } catch (e) { if (btn) btn.disabled = false; if (e.message !== 'auth') { if (errEl) errEl.textContent = e.message; else alert(e.message); } }
 }
 function enlazarPopup(popup) {
   const el = popup.getElement();
@@ -744,7 +796,33 @@ function enlazarPopup(popup) {
     });
   });
   el.querySelectorAll('button[data-recibido]').forEach((b) => { b.onclick = () => marcarRecibido(b.dataset.recibido, b); });
-  el.querySelectorAll('button[data-estado]').forEach((b) => { b.onclick = () => cambiarEstado(b.dataset.id, b.dataset.estado); });
+  const relay = () => { if (popup._map && popup._updateLayout) { popup._updateLayout(); popup._updatePosition(); if (popup._adjustPan) popup._adjustPan(); } };
+  el.querySelectorAll('button[data-abrir-form]').forEach((b) => { b.onclick = () => {
+    const f = el.querySelector(`.cierre-form[data-form="${b.dataset.abrirForm}"]`); if (!f) return;
+    f.hidden = false; b.hidden = true; relay(); const t = f.querySelector('textarea'); if (t) t.focus();
+  }; });
+  el.querySelectorAll('button[data-cerrar-form]').forEach((b) => { b.onclick = () => {
+    const f = b.closest('.cierre-form'); f.hidden = true; const ab = el.querySelector(`button[data-abrir-form="${f.dataset.form}"]`); if (ab) ab.hidden = false; relay();
+  }; });
+  el.querySelectorAll('button[data-cerrar]').forEach((b) => { b.onclick = () => {
+    const f = b.closest('.cierre-form'), motivo = f.querySelector('[data-cierre-motivo]').value;
+    cambiarEstado(b.dataset.cerrar, { estado: 'atendido', motivo, nota: f.querySelector('textarea').value.trim() }, f.querySelector('.cierre-err'), b);
+  }; });
+  el.querySelectorAll('[data-cierre-motivo]').forEach((sel) => { sel.onchange = () => { sel.closest('.cierre-form').querySelector('textarea').placeholder = CIERRE_NOTA[sel.value] || 'Nota (opcional)'; }; sel.onchange(); });
+  el.querySelectorAll('button[data-reabrir]').forEach((b) => { b.onclick = () => {
+    const f = b.closest('.cierre-form'); cambiarEstado(b.dataset.reabrir, { estado: 'pendiente', nota: f.querySelector('textarea').value.trim() }, f.querySelector('.cierre-err'), b);
+  }; });
+  el.querySelectorAll('details.bit').forEach((d) => {
+    d.addEventListener('toggle', () => { if (d.open) cargarBitacora(d, popup); relay(); });
+    const bt = d.querySelector('[data-bit-nota]'), inp = d.querySelector('.bit-nueva input');
+    const enviar = async () => {
+      const nota = inp.value.trim(); if (nota.length < 2) return; bt.disabled = true;
+      try { await mandar(`/api/incidentes/${d.dataset.bit}/notas`, 'POST', { nota }); inp.value = ''; await cargarBitacora(d, popup); }
+      catch (e) { if (e.message !== 'auth') alert('No se pudo guardar la nota: ' + e.message); }
+      bt.disabled = false;
+    };
+    bt.onclick = enviar; inp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); enviar(); } e.stopPropagation(); };
+  });
   el.querySelectorAll('button[data-eliminar]').forEach((b) => { b.onclick = () => pedirEliminar(b, () => eliminarCaso(b.dataset.eliminar)); });
   el.querySelectorAll('button[data-del-zona]').forEach((b) => { b.onclick = () => pedirEliminar(b, () => borrar(`/api/zonas/${b.dataset.delZona}`, 'la zona')); });
   el.querySelectorAll('button[data-del-svc]').forEach((b) => { b.onclick = () => pedirEliminar(b, () => borrar(`/api/servicios/${b.dataset.delSvc}`, 'el lugar')); });
@@ -786,7 +864,11 @@ async function accionUnidad(popup, btn, url, metodo, cuerpo) {
       sincronizarRuta(p);
     }
     cargar(); // la lista se actualiza al cerrar el popup
-  } catch (e) { btn.disabled = false; if (e.message !== 'auth') alert('No se pudo guardar el cambio: ' + e.message); }
+  } catch (e) {
+    btn.disabled = false;
+    if (e.codigo === 'repetida' && confirm(e.message)) return accionUnidad(popup, btn, url, metodo, { ...cuerpo, confirmar_repetida: true });
+    if (e.message !== 'auth') alert(e.message.startsWith('No se pudo') ? e.message : 'No se pudo guardar el cambio: ' + e.message);
+  }
 }
 
 // Enfoca un incidente con un vuelo suave (como Google Maps): acerca y centra el punto, y al llegar abre el popup completo a la vista
@@ -1477,7 +1559,7 @@ async function mandar(url, metodo, cuerpo) {
   const r = await fetch(url, { method: metodo, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: cuerpo ? JSON.stringify(cuerpo) : undefined });
   if (r.status === 401 || r.status === 403 && !url.includes('escenario')) { guardarToken(null); mostrarLogin(); throw new Error('auth'); }
   const d = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(d.error || 'error');
+  if (!r.ok) { const er = new Error(d.error || 'error'); er.codigo = d.codigo; throw er; }
   return d;
 }
 

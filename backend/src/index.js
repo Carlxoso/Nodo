@@ -13,6 +13,7 @@ const { cargarEscenario } = require('./escenario');
 const { construirTablero } = require('./tablero');
 const { construirInforme } = require('./informe');
 const { migrarFamilias, montarFamilias } = require('./familias');
+const { migrarFlujo, montarFlujo, registrar, CIERRES } = require('./flujo');
 const { migrarAtencion, montarAtencion, ATIENDE_SQL, TOMAR_SI_LIBRE_SQL } = require('./atencion');
 const { calcularTendencia } = require('./tendencia');
 const despacho = require('./despacho');
@@ -61,7 +62,7 @@ const CAPAS = {
   vias:      { tabla: 'vias',                 props: ['id', 'nombre', 'estado', 'fuente'] },
   albergues: { tabla: 'albergues',            props: ['id', 'nombre', 'capacidad', 'ocupacion', 'servicios', 'fuente'] },
   servicios: { tabla: 'servicios_esenciales', props: ['id', 'tipo', 'nombre'] },
-  incidentes:{ extra: `${ASIGNACIONES_SQL}, 'captura_info', (t.captura - 'hash' - 'nonce')`, tabla: 'incidentes',           props: ['id', 'tipo', 'descripcion', 'gravedad', 'personas_afectadas', 'estado', 'fuente', 'confianza', 'prioridad', 'prioridad_desglose', 'creado_en', 'foto', 'confianza_detalle', 'sos', 'peligro', 'tramo', 'recibido_en', 'ayuda_confirmada'] },
+  incidentes:{ extra: `${ASIGNACIONES_SQL}, 'captura_info', (t.captura - 'hash' - 'nonce')`, tabla: 'incidentes',           props: ['id', 'tipo', 'descripcion', 'gravedad', 'personas_afectadas', 'estado', 'fuente', 'confianza', 'prioridad', 'prioridad_desglose', 'creado_en', 'foto', 'confianza_detalle', 'sos', 'peligro', 'tramo', 'recibido_en', 'ayuda_confirmada', 'cierre_motivo', 'cierre_nota', 'cerrado_en'] },
 };
 
 async function featureCollection({ tabla, props, extra }) {
@@ -122,34 +123,15 @@ app.get('/api/incidentes', soloOperador, async (req, res) => {
   }
 });
 
-// El operador cambia el estado de un incidente (queda en la bitácora de auditoría)
-app.patch('/api/incidentes/:id/estado', soloOperador, async (req, res) => {
-  const id = Number(req.params.id);
-  const { estado } = req.body || {};
-  if (!Number.isInteger(id)) return res.status(400).json({ error: 'id inválido' });
-  if (!['pendiente', 'en_proceso', 'atendido'].includes(estado)) return res.status(400).json({ error: 'estado inválido' });
-  try {
-    const { rows } = await pool.query('UPDATE incidentes SET estado = $1, recibido_en = COALESCE(recibido_en, now()) WHERE id = $2 RETURNING id, estado', [estado, id]);
-    if (!rows.length) return res.status(404).json({ error: 'no encontrado' });
-    if (estado === 'atendido') { // al cerrar el caso, las unidades quedan libres
-      await pool.query(`UPDATE asignaciones SET estado = 'liberada', liberada_en = now() WHERE incidente_id = $1 AND estado <> 'liberada'`, [id]);
-    }
-    await auditar(pool, req.usuario.id, `cambiar_estado:${estado}`, 'incidente', id);
-    publicar({ tipo: 'incidente_estado', id, estado });
-    res.json(rows[0]);
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'error interno' });
-  }
-});
-
 // El operador confirma que recibió el reporte: la persona lo ve en su seguimiento y recibe un aviso
 app.patch('/api/incidentes/:id/recibido', soloOperador, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'id inválido' });
   try {
+    const antes = (await pool.query('SELECT recibido_en FROM incidentes WHERE id = $1', [id])).rows[0];
     const { rows } = await pool.query(`UPDATE incidentes SET recibido_en = COALESCE(recibido_en, now()), ${TOMAR_SI_LIBRE_SQL} WHERE id = $1 RETURNING id, recibido_en`, [id, req.usuario.id]);
     if (!rows.length) return res.status(404).json({ error: 'no encontrado' });
+    if (antes && !antes.recibido_en) await registrar(pool, id, req.usuario.id, 'recibido');
     await auditar(pool, req.usuario.id, 'marcar_recibido', 'incidente', id);
     publicar({ tipo: 'incidente_estado', id });
     res.json(rows[0]);
@@ -180,7 +162,13 @@ app.post('/api/incidentes/:id/asignaciones', soloOperador, async (req, res) => {
     const caso = (await cli.query('SELECT estado FROM incidentes WHERE id = $1', [id])).rows[0];
     if (!caso) return res.status(404).json({ error: 'no encontrado' });
     if (caso.estado === 'atendido') return res.status(409).json({ error: 'El caso ya está atendido. Reábrelo para asignar una unidad.' });
-    if ((await activas(pool, id)).length >= MAX_ACTIVAS) return res.status(409).json({ error: `Máximo ${MAX_ACTIVAS} unidades por caso.` });
+    const yaActivas = await activas(pool, id);
+    if (yaActivas.length >= MAX_ACTIVAS) return res.status(409).json({ error: `Máximo ${MAX_ACTIVAS} unidades por caso.` });
+    // Evita despachar dos veces lo mismo por descuido: si ya hay una de ese tipo en el caso hay que confirmarlo
+    const repetida = yaActivas.find((x) => x.unidad === unidad);
+    if (repetida && req.body.confirmar_repetida !== true) {
+      return res.status(409).json({ error: `Este caso ya tiene ${UNIDADES[unidad]} asignada (${repetida.estado === 'en_sitio' ? 'en el lugar' : 'en camino'}). ¿Enviar otra?`, codigo: 'repetida', repetida: true });
+    }
 
     // La unidad sale de la sede más cercana con unidades libres; si no hay, de la siguiente (o de la que elija el operador)
     let sede = null, masCercana = null;
@@ -202,6 +190,7 @@ app.post('/api/incidentes/:id/asignaciones', soloOperador, async (req, res) => {
     // Al salir una unidad el caso deja de estar pendiente
     const est = (await pool.query(`UPDATE incidentes SET estado = 'en_proceso' WHERE id = $1 AND estado = 'pendiente' RETURNING estado`, [id])).rows[0];
     await pool.query(`UPDATE incidentes SET recibido_en = COALESCE(recibido_en, now()), ${TOMAR_SI_LIBRE_SQL} WHERE id = $1`, [id, req.usuario.id]); // asignar una unidad también es haberlo recibido
+    await registrar(pool, id, req.usuario.id, 'asignar', { a: unidad, nota: [nombre, sede ? sede.nombre : null].filter(Boolean).join(' · ') || null });
     await auditar(pool, req.usuario.id, `asignar_unidad:${unidad}`, 'incidente', id);
     publicar({ tipo: 'incidente_estado', id, estado: est ? est.estado : caso.estado });
     if (sede) publicar({ tipo: 'unidades', sede: sede.sede_id });
@@ -221,6 +210,9 @@ app.patch('/api/asignaciones/:id', soloOperador, async (req, res) => {
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'id inválido' });
   if (!ESTADOS_ASIG.includes(estado) || estado === 'en_camino') return res.status(400).json({ error: 'estado inválido' });
   try {
+    const act = (await pool.query('SELECT estado, unidad, incidente_id FROM asignaciones WHERE id = $1', [id])).rows[0];
+    if (!act || act.estado === 'liberada') return res.status(404).json({ error: 'no encontrada' });
+    if (estado === act.estado) return res.status(409).json({ error: 'La unidad ya está en ese estado.' });
     const { rows } = await pool.query(
       `UPDATE asignaciones SET estado = $1,
          llegada_en = CASE WHEN $1 = 'en_sitio' THEN COALESCE(llegada_en, now()) ELSE llegada_en END,
@@ -228,6 +220,7 @@ app.patch('/api/asignaciones/:id', soloOperador, async (req, res) => {
        WHERE id = $2 AND estado <> 'liberada' RETURNING incidente_id`, [estado, id]);
     if (!rows.length) return res.status(404).json({ error: 'no encontrada' });
     const inc = rows[0].incidente_id;
+    await registrar(pool, inc, req.usuario.id, estado === 'en_sitio' ? 'unidad_llego' : act.estado === 'en_camino' ? 'unidad_cancelada' : 'unidad_liberada', { a: act.unidad });
     await auditar(pool, req.usuario.id, `unidad_${estado}`, 'incidente', inc);
     publicar({ tipo: 'incidente_estado', id: inc });
     publicar({ tipo: 'unidades' });
@@ -240,8 +233,13 @@ app.delete('/api/asignaciones/:id', soloOperador, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'id inválido' });
   try {
+    // «Quitar» es para corregir un error al momento. Pasados 3 minutos, o si la unidad ya llegó, hay que usar «Liberar» (queda el registro de lo que pasó)
+    const a0 = (await pool.query(`SELECT estado, unidad, incidente_id, (now() - asignada_en) > interval '3 minutes' AS vieja FROM asignaciones WHERE id = $1`, [id])).rows[0];
+    if (!a0) return res.status(404).json({ error: 'no encontrada' });
+    if ((a0.vieja || a0.estado === 'en_sitio') && req.usuario.rol !== 'admin') return res.status(409).json({ error: 'Esta unidad ya salió. Usa «Liberar» para que quede registrado.', codigo: 'solo_liberar' });
     const { rows } = await pool.query('DELETE FROM asignaciones WHERE id = $1 RETURNING incidente_id', [id]);
     if (!rows.length) return res.status(404).json({ error: 'no encontrada' });
+    await registrar(pool, rows[0].incidente_id, req.usuario.id, 'asignacion_quitada', { a: a0.unidad });
     await auditar(pool, req.usuario.id, 'cancelar_asignacion', 'incidente', rows[0].incidente_id);
     publicar({ tipo: 'incidente_estado', id: rows[0].incidente_id });
     publicar({ tipo: 'unidades' });
@@ -307,6 +305,7 @@ app.patch('/api/sedes/:id/unidades', soloInstitucion, async (req, res) => {
 // Módulo 5: familias afectadas y asistencia humanitaria (datos personales cifrados)
 montarFamilias(app, { pool, soloOperador, auditar, publicar, recalcular });
 montarAtencion(app, { pool, soloOperador, auditar, publicar });
+montarFlujo(app, { pool, soloOperador, auditar, publicar });
 
 // Carga el escenario «Jueves 06:00». Solo un administrador puede pedir además borrar los reportes ciudadanos de prueba.
 app.post('/api/escenario/jueves-0600', soloOperador, async (req, res) => {
@@ -324,6 +323,10 @@ app.post('/api/escenario/jueves-0600', soloOperador, async (req, res) => {
 app.delete('/api/incidentes/:id', soloOperador, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'id inválido' });
+  if (req.usuario.rol !== 'admin') {
+    const t = (await pool.query(`SELECT estado, recibido_en, EXISTS (SELECT 1 FROM asignaciones a WHERE a.incidente_id = i.id) AS con_unidad FROM incidentes i WHERE i.id = $1`, [id])).rows[0];
+    if (t && (t.recibido_en || t.con_unidad || t.estado !== 'pendiente')) return res.status(403).json({ error: 'Un caso ya trabajado no se elimina: ciérralo con su motivo (por ejemplo «Falsa alarma»). Solo el administrador puede eliminarlo.', codigo: 'solo_admin' });
+  }
   const cli = await pool.connect();
   let fila;
   try {
@@ -766,6 +769,7 @@ iniciarBD(pool)
   .then(() => migrarLugares(pool))
   .then(() => migrarFamilias(pool))
   .then(() => migrarAtencion(pool))
+  .then(() => migrarFlujo(pool))
   .then(() => despacho.migrarDespacho(pool))
   .then(() => verificarTodos())
   .then(() => recalcular())
