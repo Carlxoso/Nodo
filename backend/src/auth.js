@@ -8,7 +8,8 @@ const { limitar } = require('./seguridad');
 const ROLES = ['ciudadano', 'operador', 'admin', 'inst_policia', 'inst_salud', 'inst_bomberos']; // las tres últimas son cuentas de instituciones de respuesta
 const TTL_SEG = 8 * 3600;               // operador y admin: el token dura 8 horas
 const TTL_CIUDADANO = 30 * 24 * 3600;  // ciudadano: 30 días, para no pedir la clave en cada emergencia
-const ttlDe = (rol) => (rol === 'ciudadano' ? TTL_CIUDADANO : TTL_SEG);
+const TTL_RECORDAR = 7 * 24 * 3600;     // personal con «mantener mi sesión»: 7 días
+const ttlDe = (rol, recordar) => (rol === 'ciudadano' ? TTL_CIUDADANO : recordar === true ? TTL_RECORDAR : TTL_SEG);
 const secreto = () => process.env.JWT_SECRET;
 
 // ---------- Contraseñas ----------
@@ -141,7 +142,7 @@ function montarRutas(app, pool) {
   });
 
   app.post('/api/auth/login', limiteAuth, async (req, res) => {
-    const { email, password } = req.body || {};
+    const { email, password, recordar } = req.body || {};
     if (typeof email !== 'string' || typeof password !== 'string') return res.status(400).json({ error: 'faltan datos' });
     try {
       const { rows } = await pool.query('SELECT id, nombre, rol, hash_password, activo FROM usuarios WHERE email = $1', [email.trim().toLowerCase()]);
@@ -154,7 +155,7 @@ function montarRutas(app, pool) {
       }
       if (!u.activo) return res.status(403).json({ error: 'cuenta desactivada' });
       await auditar(pool, u.id, 'login', 'usuario', u.id);
-      res.json({ token: firmarToken({ sub: u.id, rol: u.rol, nom: u.nombre }, ttlDe(u.rol)), usuario: { id: u.id, nombre: u.nombre, rol: u.rol } });
+      res.json({ token: firmarToken({ sub: u.id, rol: u.rol, nom: u.nombre }, ttlDe(u.rol, recordar)), usuario: { id: u.id, nombre: u.nombre, rol: u.rol } });
     } catch (e) { console.error(e); res.status(500).json({ error: 'error interno' }); }
   });
 

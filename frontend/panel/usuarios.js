@@ -1,7 +1,7 @@
 // Gestión de usuarios (solo administrador). Usa la sesión del panel; el servidor vuelve a comprobar el rol en cada petición.
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 let token = null;
-try { token = sessionStorage.getItem('nodo_token'); } catch {}
+token = NodoSesion.leer('nodo_token');
 const $ = (s) => document.querySelector(s);
 const lista = $('#lista');
 let usuarios = [], yo = null, filtro = '';

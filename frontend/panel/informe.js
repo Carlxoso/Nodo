@@ -14,7 +14,7 @@ const fechaHora = (iso) => new Date(iso).toLocaleString('es-EC', { dateStyle: 'l
 const hora = (iso) => new Date(iso).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: TZ });
 
 let token = null;
-try { token = sessionStorage.getItem('nodo_token'); } catch {}
+token = NodoSesion.leer('nodo_token');
 const hoja = document.getElementById('hoja'), btnImp = document.getElementById('imprimir');
 
 function render(d) {

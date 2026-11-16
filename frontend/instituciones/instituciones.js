@@ -14,8 +14,9 @@ const CASO_TIPO = { inundacion: 'Inundación', deslizamiento: 'Deslizamiento', v
 const ASIG_TXT = { en_camino: 'En camino', en_sitio: 'En el sitio' };
 
 let token = null, usuario = null, datos = null, filtro = 'todas', ws = null, wsActivo = false, wsEspera = 1000;
-try { token = sessionStorage.getItem('nodo_token_inst'); } catch {}
-const guardarToken = (t) => { token = t; try { t ? sessionStorage.setItem('nodo_token_inst', t) : sessionStorage.removeItem('nodo_token_inst'); } catch {} };
+token = NodoSesion.leer('nodo_token_inst');
+const guardarToken = (t, recordar) => { token = t; t ? NodoSesion.guardar('nodo_token_inst', t, recordar) : NodoSesion.borrar('nodo_token_inst'); };
+try { const em = localStorage.getItem('nodo_email_inst'); if (em) $('#l-email').value = em; $('#l-recordar').checked = localStorage.getItem('nodo_recordar_inst') !== '0'; } catch {}
 
 // ---------- Sesión ----------
 function mostrarLogin() { $('#login').hidden = false; $('#app').hidden = true; $('#salir').hidden = true; $('#usuario').textContent = ''; $('#estado').textContent = 'Sin sesión'; $('#estado').className = 'chip'; }
@@ -35,11 +36,11 @@ $('#form-login').addEventListener('submit', async (e) => {
   e.preventDefault();
   const err = $('#l-error'), btn = $('#l-enviar'); err.textContent = ''; btn.disabled = true; btn.textContent = 'Verificando…';
   try {
-    const r = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: $('#l-email').value, password: $('#l-pass').value }) });
+    const r = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: $('#l-email').value, password: $('#l-pass').value, recordar: $('#l-recordar').checked }) });
     const d = await r.json();
     if (!r.ok) { err.textContent = d.error === 'credenciales inválidas' ? 'Correo o contraseña incorrectos.' : (d.error || 'No se pudo ingresar.'); return; }
     if (!ROLES_OK.includes(d.usuario.rol)) { err.textContent = 'Esta cuenta no tiene acceso al panel de instituciones.'; return; }
-    guardarToken(d.token); $('#l-pass').value = ''; mostrarApp(d.usuario); conectarWS(); cargar();
+    guardarToken(d.token, $('#l-recordar').checked); try { localStorage.setItem('nodo_recordar_inst', $('#l-recordar').checked ? '1' : '0'); $('#l-recordar').checked ? localStorage.setItem('nodo_email_inst', $('#l-email').value.trim()) : localStorage.removeItem('nodo_email_inst'); } catch {} $('#l-pass').value = ''; mostrarApp(d.usuario); conectarWS(); cargar();
   } catch { err.textContent = 'No hay conexión con el servidor.'; }
   finally { btn.disabled = false; btn.textContent = 'Entrar'; }
 });

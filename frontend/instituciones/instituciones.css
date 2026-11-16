@@ -63,3 +63,6 @@ body { display: flex; flex-direction: column; height: 100vh; background: var(--p
 .vacio { padding: 20px; text-align: center; color: var(--tinta-2); }
 .pin { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--c); color: #fff; border: 3px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,.35); }
 .pin .ic { width: 15px; height: 15px; }
+
+.check-recordar { display: flex; align-items: center; gap: 8px; margin-top: 14px; font-size: 13.5px; font-weight: 500; color: var(--tinta-2); }
+.check-recordar input { width: 18px; height: 18px; margin: 0; padding: 0; accent-color: var(--marea); flex: none; }

@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="/compartido/carga.css">
   <script>window.NODO_CARGA_LAZY = true;</script>
   <script src="/compartido/carga.js"></script>
+  <script src="/compartido/sesion.js"></script>
   <link rel="stylesheet" href="/compartido/base.css">
   <link rel="stylesheet" href="panel.css">
 </head>
@@ -19,23 +20,23 @@
   <header class="barra">
     <span class="logo">
       <img class="logo-img" src="/compartido/logo.svg" alt="" width="30" height="30">
-      NODO <span class="sub"><svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#centro"></use></svg>Centro de operaciones</span>
+      NODO <span class="sub"><svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#centro"></use></svg><span class="txt">Centro de operaciones</span></span>
     </span>
     <p class="aviso">Apoyo a la decisión. No reemplaza al COE ni al 911.</p>
     <button id="btn-usuarios" class="btn-sec" type="button" hidden>
-      <svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#usuarios"></use></svg>Usuarios
+      <svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#usuarios"></use></svg><span class="txt">Usuarios</span>
     </button>
     <button id="btn-sonido" class="btn-sec" type="button" aria-label="Sonido de avisos" aria-pressed="true" title="Sonido de avisos">
-      <svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#sonido"></use></svg><span>Sonido</span>
+      <svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#sonido"></use></svg><span class="txt">Sonido</span>
     </button>
-    <a id="btn-instituciones" class="btn-sec" href="/instituciones/" target="_blank" rel="noopener" title="Abrir el panel de instituciones en otra pestaña"><svg class="ic" aria-hidden="true"><use href="/compartido/iconos-solidos.svg#upc"></use></svg>Instituciones</a>
+    <a id="btn-instituciones" class="btn-sec" href="/instituciones/" target="_blank" rel="noopener" title="Abrir el panel de instituciones en otra pestaña"><svg class="ic" aria-hidden="true"><use href="/compartido/iconos-solidos.svg#upc"></use></svg><span class="txt">Instituciones</span></a>
     <button id="btn-informe" class="btn-sec" hidden>
-      <svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#informe"></use></svg>Informe COE
+      <svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#informe"></use></svg><span class="txt">Informe COE</span>
     </button>
     <span id="estado" class="chip" role="status">Conectando…</span>
     <span id="usuario" class="usuario"></span>
     <button id="salir" class="btn-sec salir" hidden>
-      <svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#salir"></use></svg>Salir
+      <svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#salir"></use></svg><span class="txt">Salir</span>
     </button>
   </header>
 
@@ -60,6 +61,7 @@
         <label>Contraseña
           <span class="campo-ico con-ojo"><svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#candado"></use></svg><input type="password" id="l-pass" required autocomplete="current-password" placeholder="Tu contraseña"><button type="button" class="ojo" aria-label="Mostrar contraseña" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="/compartido/iconos.svg#ojo"></use></svg></button></span>
         </label>
+        <label class="check-recordar"><input type="checkbox" id="l-recordar" checked> Mantener mi sesión en este dispositivo (7 días)</label>
         <p id="l-error" class="error" role="alert"></p>
         <button type="submit" id="l-enviar" class="btn grande"><span id="l-enviar-txt">Entrar al panel</span></button>
         <p class="login-pie">Apoyo a la decisión. No reemplaza al COE ni al 911.</p>
@@ -87,6 +89,7 @@
       <div id="vista-familias" hidden></div>
     </aside>
     <div id="mapa" aria-label="Mapa de Esmeraldas con incidentes"></div>
+    <div id="aviso-caso" class="aviso-caso" role="alert" hidden></div>
   </main>
   <script src="/compartido/ojo.js"></script>
   <script src="/vendor/leaflet/leaflet.js"></script>
