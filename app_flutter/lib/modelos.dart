@@ -91,7 +91,8 @@ class Reporte {
   String estadoLocal; // pendiente | enviado | rechazado
   String? estadoServidor, error, verificacion, peligroN;
   int? cuenta; // id de la cuenta con la que se envió (null = anónimo)
-  bool huboUnidad, recibido;
+  bool huboUnidad, recibido, ayudaEditando;
+  Map<String, dynamic>? ayudaConfirmada; // lo que la persona respondió: {resultado: llego|no_llego, ...}
   int desfaseMs;
   final int creado;
   List<Unidad> unidades;
@@ -108,6 +109,8 @@ class Reporte {
     this.cuenta,
     this.huboUnidad = false,
     this.recibido = false,
+    this.ayudaEditando = false,
+    this.ayudaConfirmada,
     this.desfaseMs = 0,
     List<Unidad>? unidades,
   }) : unidades = unidades ?? [];
@@ -129,6 +132,7 @@ class Reporte {
         cuenta: j['cuenta'] as int?,
         huboUnidad: (j['hubo_unidad'] ?? false) as bool,
         recibido: (j['recibido'] ?? false) as bool,
+        ayudaConfirmada: j['ayuda_confirmada'] == null ? null : Map<String, dynamic>.from(j['ayuda_confirmada'] as Map),
         desfaseMs: (j['desfase'] ?? 0) as int,
         unidades: ((j['unidades'] ?? []) as List).map((u) => Unidad.fromJson(Map<String, dynamic>.from(u as Map))).toList(),
       );
@@ -145,6 +149,7 @@ class Reporte {
         'cuenta': cuenta,
         'hubo_unidad': huboUnidad,
         'recibido': recibido,
+        'ayuda_confirmada': ayudaConfirmada,
         'desfase': desfaseMs,
         'unidades': unidades.map((u) => u.toJson()).toList(),
       };

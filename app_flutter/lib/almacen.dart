@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import 'api.dart';
@@ -133,6 +134,35 @@ class Almacen extends ChangeNotifier {
 
   /// Quita el reporte de «Mis reportes». Si ya se envió y no está atendido, también lo cancela en el servidor (sale del panel).
   /// Devuelve un texto de error si no se pudo cancelar (el reporte se conserva), o null si todo salió bien.
+  /// Confirma si la ayuda llegó. Devuelve un mensaje de error o null si salió bien.
+  Future<String?> confirmarAyuda(String uuid, bool llego) async {
+    final r = reportes.where((x) => x.uuid == uuid).firstOrNull;
+    if (r == null) return null;
+    double? lat, lon, pr;
+    try {
+      final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high, timeLimit: const Duration(seconds: 8));
+      lat = pos.latitude; lon = pos.longitude; pr = pos.accuracy;
+    } catch (_) {} // sin GPS igual se envía; solo no se podrá comprobar el lugar
+    try {
+      r.ayudaConfirmada = await Api.confirmarAyuda(uuid, llego, _dispositivoId(), lat: lat, lon: lon, precision: pr);
+      r.ayudaEditando = false;
+      await _guardar();
+      notifyListeners();
+      return null;
+    } on ApiError catch (e) {
+      return e.codigo == null ? 'Sin conexión. Intenta de nuevo.' : e.mensaje;
+    } catch (_) {
+      return 'Sin conexión. Intenta de nuevo.';
+    }
+  }
+
+  void cambiarAyuda(String uuid) {
+    final r = reportes.where((x) => x.uuid == uuid).firstOrNull;
+    if (r == null) return;
+    r.ayudaEditando = true;
+    notifyListeners();
+  }
+
   Future<String?> eliminar(String uuid) async {
     final idx = reportes.indexWhere((r) => r.uuid == uuid);
     if (idx >= 0) {
@@ -272,6 +302,7 @@ class Almacen extends ChangeNotifier {
           r.huboUnidad = d['hubo_unidad'] == true;
           r.recibido = d['recibido'] == true;
           r.verificacion = d['verificacion'] as String?;
+          if (d['ayuda_confirmada'] != null) r.ayudaConfirmada = Map<String, dynamic>.from(d['ayuda_confirmada'] as Map);
           final ahora = d['ahora'] as String?;
           r.desfaseMs = ahora != null ? (DateTime.tryParse(ahora)?.millisecondsSinceEpoch ?? 0) - DateTime.now().millisecondsSinceEpoch : 0;
           huboRed = true;

@@ -57,6 +57,7 @@ class _Fila extends StatelessWidget {
       extra = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         if (sg.apoyo.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 2), child: Text(sg.apoyo, style: const TextStyle(color: C.marea, fontSize: 14))),
         _Pasos(hechos: sg.hechos),
+        if (r.unidades.isNotEmpty && r.estadoServidor != 'atendido') _Ayuda(r: r, almacen: almacen),
         if (r.unidades.isNotEmpty)
           SizedBox(
             width: double.infinity,
@@ -148,6 +149,62 @@ class _Pasos extends StatelessWidget {
               Text(pasosTxt[i], textAlign: TextAlign.center, style: TextStyle(fontSize: 11.5, height: 1.2, fontWeight: i == hechos - 1 || i == hechos ? FontWeight.w600 : FontWeight.w400, color: i <= hechos ? C.tinta : C.tinta2)),
             ]),
           ),
+      ]),
+    );
+  }
+}
+
+
+/// «¿Ya llegó la ayuda?»: la confirma quien está en el lugar; el COE la contrasta con lo que marcan las unidades.
+class _Ayuda extends StatefulWidget {
+  final Reporte r;
+  final Almacen almacen;
+  const _Ayuda({required this.r, required this.almacen});
+
+  @override
+  State<_Ayuda> createState() => _AyudaState();
+}
+
+class _AyudaState extends State<_Ayuda> {
+  bool _enviando = false;
+
+  Future<void> _enviar(bool llego) async {
+    setState(() => _enviando = true);
+    final err = await widget.almacen.confirmarAyuda(widget.r.uuid, llego);
+    if (!mounted) return;
+    setState(() => _enviando = false);
+    if (err != null) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.r.ayudaEditando ? null : widget.r.ayudaConfirmada;
+    if (c != null) {
+      final si = c['resultado'] == 'llego';
+      return Container(
+        margin: const EdgeInsets.only(top: 10),
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(color: si ? const Color(0xFFE4F3EB) : const Color(0xFFFFF1CF), borderRadius: BorderRadius.circular(10)),
+        child: Row(children: [
+          Icon(si ? Icons.check_circle_outline : Icons.warning_amber_rounded, size: 20),
+          const SizedBox(width: 8),
+          Expanded(child: Text(si ? 'Confirmaste que la ayuda llegó. Gracias.' : 'Avisaste que la ayuda aún no llega. El centro de operaciones lo verá.')),
+          TextButton(onPressed: () => widget.almacen.cambiarAyuda(widget.r.uuid), child: const Text('Cambiar')),
+        ]),
+      );
+    }
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(color: C.mareaClaro, borderRadius: BorderRadius.circular(10)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('¿Ya llegó la ayuda?', style: TextStyle(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(child: OutlinedButton(onPressed: _enviando ? null : () => _enviar(true), child: Text(_enviando ? 'Enviando…' : 'Sí, ya llegó'))),
+          const SizedBox(width: 8),
+          Expanded(child: OutlinedButton(onPressed: _enviando ? null : () => _enviar(false), child: const Text('Todavía no'))),
+        ]),
       ]),
     );
   }

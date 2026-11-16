@@ -286,8 +286,24 @@ function unidadesHtml(p) {
     <button class="u-asignar" data-asignar="${esc(p.id)}">Asignar</button>
     <div class="u-prev" data-u-prev aria-live="polite"></div></div>`;
   const ok = p._despacho ? `<div class="u-prev ok">${ico('ok-circulo')}<span>${esc(p._despacho)}</span></div>` : '';
-  return `${recHtml}<div class="unidades"><b>Unidades asignadas</b>${filas || '<small class="u-vacio">Ninguna todavía.</small>'}${ok}${form}</div>`;
+  return `${recHtml}<div class="unidades"><b>Unidades asignadas</b>${filas || '<small class="u-vacio">Ninguna todavía.</small>'}${ayudaConfHtml(p)}${ok}${form}</div>`;
 }
+// Confirmación de la persona que reportó: contrasta lo que marca el COE («Llegó») con lo que ve quien está en el lugar
+function ayudaConfEstado(p) {
+  const c = p.ayuda_confirmada; if (!c) return null;
+  const coe = (p.asignaciones || []).some((a) => a.estado === 'en_sitio');
+  if (c.resultado === 'llego') {
+    const donde = c.en_lugar ? `en el lugar (a ${c.dist_m} m)` : c.dist_m != null ? `pero estaba a ${c.dist_m} m del caso` : 'sin ubicación para comprobarlo';
+    return { cls: c.en_lugar ? 'ok' : 'dudoso', corto: c.en_lugar ? 'Llegada confirmada' : 'Llegada sin comprobar', txt: `La persona confirmó que la ayuda llegó (${donde}).${coe ? '' : ' El COE aún no marcó «Llegó».'}` };
+  }
+  return { cls: 'mal', corto: 'Dice que NO llegó', txt: coe ? 'La persona dice que la ayuda NO ha llegado, pero el COE marcó «Llegó». Verifica con la unidad por radio.' : 'La persona dice que la ayuda aún NO ha llegado.' };
+}
+function ayudaConfHtml(p) {
+  const e = ayudaConfEstado(p); if (!e) return '';
+  const hora = new Date(p.ayuda_confirmada.en).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' });
+  return `<div class="ayuda-conf ${e.cls}">${ico(e.cls === 'mal' ? 'alerta' : 'ok-circulo')}<span>${esc(e.txt)} <small>${esc(hora)}</small></span></div>`;
+}
+const ayudaConfChip = (p) => { const e = ayudaConfEstado(p); return e ? `<span class="chip ayuda-chip ${e.cls}" title="${esc(e.txt)}">${ico(e.cls === 'mal' ? 'alerta' : 'ok-circulo')}${esc(e.corto)}</span>` : ''; };
 // Antes de asignar: de qué sede saldría la unidad (la más cercana con unidades libres) o por qué saldría de otra
 async function previoDespacho(f) {
   const prev = f.querySelector('[data-u-prev]'), btn = f.querySelector('[data-asignar]'), unidad = f.querySelector('[data-u-tipo]').value;
@@ -594,7 +610,7 @@ function filaCaso(p, porId) {
     <div class="cuerpo"><div class="titulo">${ico(TIPO_ICO[p.tipo] || 'otro')}${esc(TIPO_NOMBRE[p.tipo] || p.tipo)}</div>
     <p class="desc">${esc(p.descripcion || 'Sin descripción')}</p>
     <div class="datos">${p.sos ? '<span class="chip sos-chip">SOS</span>' : ''}${p.peligro ? `<span class="chip peligro-chip">${ico('peligro')}Peligro en la vía</span>` : ''}<span class="chip"><i class="punto" style="--c:${FUENTE[p.fuente] || '#777'}"></i>${esc(FUENTE_NOMBRE[p.fuente] || p.fuente)}</span>
-    <span class="chip">${esc(ESTADO_NOMBRE[p.estado] || p.estado)}</span><span class="chip">${ico('personas')}${esc(p.personas_afectadas)}</span>${verifChip(p)}${fotoChip(p)}${unidadesChips(p)}
+    <span class="chip">${esc(ESTADO_NOMBRE[p.estado] || p.estado)}</span><span class="chip">${ico('personas')}${esc(p.personas_afectadas)}</span>${verifChip(p)}${fotoChip(p)}${ayudaConfChip(p)}${unidadesChips(p)}
     ${recibidoCaso(p) ? `<span class="chip recibido-chip">${ico('ok-circulo')}Recibido</span>` : `<button type="button" class="recibir recibir-fila" data-recibido="${esc(p.id)}" title="Avisa a la persona que su reporte llegó">${ico('ok-circulo')}Marcar recibido</button>`}</div></div>`;
   if (p.estado !== 'atendido' && !p.peligro) {
     const cuerpo = li.querySelector('.cuerpo'); cuerpo.insertAdjacentHTML('beforeend', `<div class="dueno-fila">${duenoChip(p)}</div>` + recomendadasChips(p));

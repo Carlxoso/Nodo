@@ -61,7 +61,7 @@ const CAPAS = {
   vias:      { tabla: 'vias',                 props: ['id', 'nombre', 'estado', 'fuente'] },
   albergues: { tabla: 'albergues',            props: ['id', 'nombre', 'capacidad', 'ocupacion', 'servicios', 'fuente'] },
   servicios: { tabla: 'servicios_esenciales', props: ['id', 'tipo', 'nombre'] },
-  incidentes:{ extra: `${ASIGNACIONES_SQL}, 'captura_info', (t.captura - 'hash' - 'nonce')`, tabla: 'incidentes',           props: ['id', 'tipo', 'descripcion', 'gravedad', 'personas_afectadas', 'estado', 'fuente', 'confianza', 'prioridad', 'prioridad_desglose', 'creado_en', 'foto', 'confianza_detalle', 'sos', 'peligro', 'tramo', 'recibido_en'] },
+  incidentes:{ extra: `${ASIGNACIONES_SQL}, 'captura_info', (t.captura - 'hash' - 'nonce')`, tabla: 'incidentes',           props: ['id', 'tipo', 'descripcion', 'gravedad', 'personas_afectadas', 'estado', 'fuente', 'confianza', 'prioridad', 'prioridad_desglose', 'creado_en', 'foto', 'confianza_detalle', 'sos', 'peligro', 'tramo', 'recibido_en', 'ayuda_confirmada'] },
 };
 
 async function featureCollection({ tabla, props, extra }) {
@@ -597,7 +597,7 @@ app.get('/api/reportes/:uuid', async (req, res) => {
       `SELECT i.estado, i.tipo, i.creado_en, i.confianza_detalle->>'verificacion' AS verificacion, now() AS ahora,
               EXISTS (SELECT 1 FROM asignaciones a WHERE a.incidente_id = i.id) AS hubo_unidad,
               (i.recibido_en IS NOT NULL OR i.estado <> 'pendiente' OR EXISTS (SELECT 1 FROM asignaciones a WHERE a.incidente_id = i.id)) AS recibido,
-              i.recibido_en,
+              i.recibido_en, i.ayuda_confirmada,
               COALESCE((SELECT json_agg(json_build_object('unidad', a.unidad, 'estado', a.estado, 'asignada_en', a.asignada_en, 'llegada_en', a.llegada_en,
                           'origen', (SELECT json_build_object('lat', ST_Y(sv.geom), 'lon', ST_X(sv.geom), 'nombre', sv.nombre)
                                      FROM servicios_esenciales sv
@@ -611,6 +611,39 @@ app.get('/api/reportes/:uuid', async (req, res) => {
     console.error(e);
     res.status(500).json({ error: 'error interno' });
   }
+});
+
+// La persona que reportó confirma si la ayuda llegó (verificación independiente de lo que marca el COE).
+// Solo la puede dar quien hizo el reporte (mismo teléfono o misma cuenta) y cuando ya hay una unidad asignada.
+// Si manda su ubicación, se compara con la del caso: dentro de 300 m (y GPS de ±100 m o mejor) cuenta como «en el lugar».
+app.post('/api/reportes/:uuid/ayuda', autenticarOpcional, async (req, res) => {
+  if (!UUID_RE.test(req.params.uuid)) return res.status(400).json({ error: 'uuid inválido' });
+  const { llego, lat, lon, precision } = req.body || {};
+  if (typeof llego !== 'boolean') return res.status(400).json({ error: 'indica si la ayuda llegó (true o false)' });
+  const disp = req.get('x-dispositivo');
+  try {
+    const q = await pool.query(
+      `SELECT i.id, i.estado, i.dispositivo, i.usuario_id, ST_Y(i.geom) AS lat, ST_X(i.geom) AS lon,
+              EXISTS (SELECT 1 FROM asignaciones a WHERE a.incidente_id = i.id) AS hubo_unidad
+       FROM incidentes i WHERE i.uuid_cliente = $1`, [req.params.uuid]);
+    if (!q.rows.length) return res.status(404).json({ error: 'no encontrado' });
+    const f = q.rows[0];
+    const esDueno = (req.usuario && f.usuario_id != null && f.usuario_id === req.usuario.id)
+      || (disp && UUID_RE.test(disp) && f.dispositivo && f.dispositivo.toLowerCase() === disp.toLowerCase());
+    if (!esDueno) return res.status(403).json({ error: 'solo quien hizo el reporte puede confirmarlo' });
+    if (!f.hubo_unidad) return res.status(409).json({ error: 'todavía no hay ayuda asignada a este reporte' });
+    const conf = { resultado: llego ? 'llego' : 'no_llego', en: new Date().toISOString(), dist_m: null, precision_m: null, en_lugar: false };
+    const la = Number(lat), lo = Number(lon), pr = Number(precision);
+    if (Number.isFinite(la) && Number.isFinite(lo) && Math.abs(la) <= 90 && Math.abs(lo) <= 180) {
+      conf.dist_m = Math.round(capturaMod.distanciaM(la, lo, f.lat, f.lon));
+      if (Number.isFinite(pr) && pr >= 0) conf.precision_m = Math.round(pr);
+      conf.en_lugar = conf.dist_m <= 300 && conf.precision_m != null && conf.precision_m <= 100;
+    }
+    await pool.query('UPDATE incidentes SET ayuda_confirmada = $1::jsonb WHERE id = $2', [JSON.stringify(conf), f.id]);
+    await auditar(pool, req.usuario ? req.usuario.id : null, llego ? 'ayuda_confirmada_llego' : 'ayuda_confirmada_no_llego', 'incidente', f.id);
+    publicar({ tipo: 'incidente_estado', id: f.id });
+    res.json({ ok: true, ayuda_confirmada: conf });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'error interno' }); }
 });
 
 // La persona cancela su propio reporte: se borra del servidor y desaparece del panel.

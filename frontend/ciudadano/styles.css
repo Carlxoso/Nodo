@@ -432,3 +432,13 @@ body[data-vista="cuenta"] .alerta { display: none; }
 .cam-disp:active { transform: scale(.92); }
 button.boton-foto { background: none; font: inherit; }
 #preview { margin: 10px 0 4px; max-width: 100%; border-radius: 12px; }
+
+/* ¿Llegó la ayuda? */
+.ayuda-preg { margin-top: 10px; padding: 10px; border-radius: 10px; background: var(--marea-claro); }
+.ayuda-preg b { display: block; margin-bottom: 8px; font-size: 14px; }
+.ayuda-bt { display: flex; gap: 8px; }
+.ayuda-bt button { flex: 1; justify-content: center; min-height: 44px; }
+.ayuda-resp { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 10px; border-radius: 10px; font-size: 14px; }
+.ayuda-resp.si { background: #E4F3EB; color: #1F6B47; } .ayuda-resp.no { background: #FFF1CF; color: #7A5200; }
+.ayuda-resp .ic { width: 20px; height: 20px; flex: none; }
+.ayuda-cambiar { margin-left: auto; border: 0; background: none; color: inherit; text-decoration: underline; font: inherit; cursor: pointer; padding: 6px; }

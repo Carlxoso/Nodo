@@ -4,7 +4,8 @@
 async function migrarAtencion(pool) {
   await pool.query(`ALTER TABLE incidentes
     ADD COLUMN IF NOT EXISTS atiende_id INT REFERENCES usuarios(id) ON DELETE SET NULL,
-    ADD COLUMN IF NOT EXISTS atiende_desde TIMESTAMPTZ`);
+    ADD COLUMN IF NOT EXISTS atiende_desde TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS ayuda_confirmada JSONB`);
   await pool.query('CREATE INDEX IF NOT EXISTS idx_incidentes_atiende ON incidentes (atiende_id)');
 }
 

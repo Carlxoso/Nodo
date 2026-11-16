@@ -88,6 +88,15 @@ class Api {
     throw ApiError(_errorDe(r, 'No se pudo cancelar el reporte.'), r.statusCode);
   }
 
+  /// La persona confirma si la ayuda llegó. Si hay ubicación, el servidor la compara con la del caso.
+  static Future<Map<String, dynamic>> confirmarAyuda(String uuid, bool llego, String dispositivo, {double? lat, double? lon, double? precision}) async {
+    final r = await http.post(Uri.parse('${Config.baseUrl}/api/reportes/$uuid/ayuda'),
+        headers: {..._json, 'X-Dispositivo': dispositivo},
+        body: jsonEncode({'llego': llego, if (lat != null && lon != null) ...{'lat': lat, 'lon': lon, 'precision': precision}})).timeout(_t);
+    if (r.statusCode != 200) throw ApiError(_errorDe(r, 'No se pudo enviar la confirmación.'), r.statusCode);
+    return Map<String, dynamic>.from((jsonDecode(r.body) as Map)['ayuda_confirmada'] as Map);
+  }
+
   static Future<List<Aviso>> avisos() async {
     final r = await http.get(Uri.parse('${Config.baseUrl}/api/alertas')).timeout(_t);
     if (r.statusCode != 200) throw ApiError('sin avisos', r.statusCode);

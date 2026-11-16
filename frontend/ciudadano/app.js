@@ -499,7 +499,7 @@ async function sincronizar() {
         const res = await fetch('/api/reportes/' + r.uuid);
         if (res.ok) {
           const antes = seguimiento(r), d = await res.json();
-          r.estado_servidor = d.estado; r.unidades = d.unidades || []; r.hubo_unidad = !!d.hubo_unidad; r.recibido = !!d.recibido; r.verificacion = d.verificacion || null;
+          r.estado_servidor = d.estado; r.unidades = d.unidades || []; r.hubo_unidad = !!d.hubo_unidad; r.recibido = !!d.recibido; r.verificacion = d.verificacion || null; r.ayuda_confirmada = d.ayuda_confirmada || r.ayuda_confirmada || null;
           r.desfase = d.ahora ? Date.parse(d.ahora) - Date.now() : 0; // reloj del servidor menos el del teléfono
           await guardar(r);
           if (window.recorridoNovedades) recorridoNovedades(r);
@@ -512,6 +512,39 @@ async function sincronizar() {
   } finally { sincronizando = false; }
   pintarLista();
 }
+
+// «¿Llegó la ayuda?»: lo confirma quien está en el lugar (el COE lo contrasta con lo que marcan las unidades)
+function ayudaHtml(r) {
+  if (!(r.unidades || []).length || r.estado_servidor === 'atendido') return '';
+  const c = r.ayuda_editando ? null : r.ayuda_confirmada;
+  if (c) return `<div class="ayuda-resp ${c.resultado === 'llego' ? 'si' : 'no'}">${ico(c.resultado === 'llego' ? 'ok-circulo' : 'alerta')}<span>${c.resultado === 'llego' ? 'Confirmaste que la ayuda llegó. Gracias.' : 'Avisaste que la ayuda aún no llega. El centro de operaciones lo verá.'}</span>
+    <button type="button" class="ayuda-cambiar" data-ayuda-cambiar="${esc(r.uuid)}">Cambiar</button></div>`;
+  return `<div class="ayuda-preg"><b>¿Ya llegó la ayuda?</b><div class="ayuda-bt"><button type="button" class="btn-sec" data-ayuda="${esc(r.uuid)}" data-llego="1">${ico('ok-circulo')}Sí, ya llegó</button>
+    <button type="button" class="btn-sec" data-ayuda="${esc(r.uuid)}" data-llego="0">Todavía no</button></div></div>`;
+}
+function ubicacionRapida() {
+  return new Promise((ok) => {
+    if (!navigator.geolocation) return ok(null);
+    navigator.geolocation.getCurrentPosition((p) => ok({ lat: p.coords.latitude, lon: p.coords.longitude, precision: p.coords.accuracy }), () => ok(null), { enableHighAccuracy: true, timeout: 8000, maximumAge: 20000 });
+  });
+}
+document.addEventListener('click', async (e) => {
+  const cam = e.target.closest && e.target.closest('[data-ayuda-cambiar]');
+  if (cam) { const r = (await todos()).find((x) => x.uuid === cam.dataset.ayudaCambiar); if (r) { r.ayuda_editando = true; await guardar(r); pintarLista(); } return; }
+  const b = e.target.closest && e.target.closest('[data-ayuda]'); if (!b) return;
+  const uuid = b.dataset.ayuda, llego = b.dataset.llego === '1';
+  b.parentElement.querySelectorAll('button').forEach((x) => { x.disabled = true; }); b.textContent = 'Enviando…';
+  try {
+    const h = cabeceras(); h['X-Dispositivo'] = dispositivoId() || '';
+    const u = await ubicacionRapida();
+    const res = await fetch(`/api/reportes/${uuid}/ayuda`, { method: 'POST', headers: h, body: JSON.stringify({ llego, ...(u || {}) }) });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(d.error || String(res.status));
+    const r = (await todos()).find((x) => x.uuid === uuid); if (r) { r.ayuda_confirmada = d.ayuda_confirmada; r.ayuda_editando = false; await guardar(r); }
+    aviso(llego ? 'Gracias por confirmar que la ayuda llegó.' : 'Listo. Avisamos al centro de operaciones que la ayuda aún no llega.');
+  } catch (err) { aviso('No se pudo enviar la confirmación. Revisa tu conexión e intenta de nuevo.'); }
+  pintarLista();
+});
 
 // ---------- Lista y conexión ----------
 const vistos = new Set();
@@ -529,7 +562,7 @@ async function pintarLista() {
       const sg = seguimiento(r), desde = r.hechosVistos == null ? sg.hechos : r.hechosVistos;
       if (r.hechosVistos !== sg.hechos) { r.hechosVistos = sg.hechos; guardar(r); } // los pasos nuevos se animan una sola vez
       txt = sg.txt; cls = 'ok'; icono = sg.icono; extra = (sg.apoyo ? `<div class="e apoyo">${esc(sg.apoyo)}</div>` : '') + pasosHtml(sg.hechos, desde)
-      + ((r.unidades || []).length ? `<button type="button" class="btn-sec ver-recorrido" data-uuid="${esc(r.uuid)}">${ico('ruta')}Ver recorrido de la ayuda</button>` : ''); }
+      + ((r.unidades || []).length ? `<button type="button" class="btn-sec ver-recorrido" data-uuid="${esc(r.uuid)}">${ico('ruta')}Ver recorrido de la ayuda</button>` : '') + ayudaHtml(r); }
     const cuando = new Date(r.creado).toLocaleString('es-EC', { dateStyle: 'short', timeStyle: 'short' });
     const nuevoLi = !primeraLista && !vistos.has(r.uuid); vistos.add(r.uuid);
     return `<li class="${cls}${nuevoLi ? ' nuevo' : ''}" data-estado="${esc(r.estado_local)}"><span class="estado-ico">${ico(icono)}</span>
