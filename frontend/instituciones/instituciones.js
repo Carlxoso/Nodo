@@ -9,7 +9,7 @@ const plural = (n, s, p) => `${n} ${n === 1 ? s : p}`;
 const ROLES_OK = ['operador', 'admin', 'inst_policia', 'inst_salud', 'inst_bomberos'];
 const ROL_TXT = { operador: 'Operador del COE', admin: 'Administrador', inst_policia: 'Policía', inst_salud: 'Hospital', inst_bomberos: 'Bomberos' };
 const TIPO_SEDE = { upc: { n: 'Policía', i: 'upc' }, salud: { n: 'Hospital', i: 'salud' }, bomberos: { n: 'Bomberos', i: 'bomberos' } };
-const UNIDAD = { policia: ['Patrullas de policía', 'upc'], ambulancia: ['Ambulancias', 'salud'], bomberos: ['Unidades de bomberos', 'bomberos'], rescate: ['Equipos de rescate', 'rescate'], achique: ['Bombas de achique', 'agua'] };
+const UNIDAD = { policia: ['Patrullas', 'upc'], ambulancia: ['Ambulancias', 'salud'], bomberos: ['Bomberos', 'bomberos'], rescate: ['Rescate', 'rescate'], achique: ['Achique', 'agua'] };
 const CASO_TIPO = { inundacion: 'Inundación', deslizamiento: 'Deslizamiento', via_cortada: 'Vía cortada', rescate: 'Rescate', otro: 'Otro', terremoto: 'Terremoto', tsunami: 'Tsunami', incendio: 'Incendio', derrumbe: 'Derrumbe' };
 const ASIG_TXT = { en_camino: 'En camino', en_sitio: 'En el sitio' };
 
@@ -73,7 +73,7 @@ function pintarMapa(sedes, primera) {
 function pintarResumen(r) {
   $('#resumen').innerHTML = r.map((u) => {
     const c = u.disponibles === 0 ? '#B42318' : u.disponibles <= 1 ? '#B7791F' : '#2F7D5B', [n, i] = UNIDAD[u.unidad] || [u.unidad, 'alerta'];
-    return `<div class="res-u"><span class="n">${ico(i)}${esc(n)}</span><b style="--c:${c}">${esc(u.disponibles)} <small>de ${esc(u.total)} libres</small></b></div>`;
+    return `<div class="res-u" style="--c:${c}" title="${esc(n)}: ${esc(u.disponibles)} libres de ${esc(u.total)}">${ico(i)}<span class="n">${esc(n)}</span><b>${esc(u.disponibles)}<small>/${esc(u.total)}</small></b></div>`;
   }).join('');
 }
 function pintarFiltros(d) {
@@ -91,22 +91,17 @@ function pintarSedes(sedes) {
     const filas = s.unidades.map((u) => {
       const [nom, ic] = UNIDAD[u.unidad] || [u.unidad, 'alerta'];
       const mis = s.misiones.filter((m) => m.unidad === u.unidad);
+      const btn = (c, d, txt, lab, off) => `<button type="button" data-s="${esc(s.id)}" data-u="${esc(u.unidad)}" data-c="${c}" data-d="${d}" aria-label="${lab}"${off ? ' disabled' : ''}>${txt}</button>`;
+      const cls = u.disponibles === 0 ? 'cero' : u.disponibles <= 1 ? 'poco' : 'ok';
       return `<div class="u-fila">
-        <div class="u-tit">${ico(ic)}<span>${esc(nom)}</span><span class="libres pill ${u.disponibles === 0 ? 'cero' : u.disponibles <= 1 ? 'poco' : 'ok'}">${esc(u.disponibles)} ${u.disponibles === 1 ? 'libre' : 'libres'}</span></div>
-        <div class="u-ctl">
-          <span class="ctl" title="Unidades que tiene la sede">Total
-            <button type="button" data-s="${esc(s.id)}" data-u="${esc(u.unidad)}" data-c="total" data-d="-1" aria-label="Una unidad menos en total"${u.total <= 0 ? ' disabled' : ''}>−</button>
-            <output>${esc(u.total)}</output>
-            <button type="button" data-s="${esc(s.id)}" data-u="${esc(u.unidad)}" data-c="total" data-d="1" aria-label="Una unidad más en total"${u.total >= 99 ? ' disabled' : ''}>+</button></span>
-          <span class="ctl" title="Averiadas, en mantenimiento o sin personal">Fuera de servicio
-            <button type="button" data-s="${esc(s.id)}" data-u="${esc(u.unidad)}" data-c="fuera" data-d="-1" aria-label="Una unidad fuera de servicio menos"${u.fuera <= 0 ? ' disabled' : ''}>−</button>
-            <output>${esc(u.fuera)}</output>
-            <button type="button" data-s="${esc(s.id)}" data-u="${esc(u.unidad)}" data-c="fuera" data-d="1" aria-label="Una unidad más fuera de servicio"${u.fuera >= u.total ? ' disabled' : ''}>+</button></span>
-        </div>
-        ${mis.length ? `<div class="u-mis">En misión (${mis.length}): ${mis.map((m) => `<span class="mision ${esc(m.estado)}">Caso ${esc(m.caso.id)} · ${esc(CASO_TIPO[m.caso.tipo] || m.caso.tipo)}${m.caso.sos ? ' · SOS' : ''} · ${esc(ASIG_TXT[m.estado] || m.estado)}</span>`).join('')}</div>` : `<div class="u-mis">En misión: ninguna.</div>`}
+        <span class="u-nom">${ico(ic)}${esc(nom)}</span>
+        <span class="ctl" title="Unidades que tiene la sede">Total ${btn('total', -1, '−', 'Una unidad menos en total', u.total <= 0)}<output>${esc(u.total)}</output>${btn('total', 1, '+', 'Una unidad más en total', u.total >= 99)}</span>
+        <span class="ctl" title="Averiadas, en mantenimiento o sin personal">Fuera ${btn('fuera', -1, '−', 'Una unidad fuera de servicio menos', u.fuera <= 0)}<output>${esc(u.fuera)}</output>${btn('fuera', 1, '+', 'Una unidad más fuera de servicio', u.fuera >= u.total)}</span>
+        <span class="pill ${cls}" title="Libres para despachar">${esc(u.disponibles)}</span>
+        ${mis.length ? `<div class="u-mis">${mis.map((m) => `<span class="mision ${esc(m.estado)}">Caso ${esc(m.caso.id)} · ${esc(CASO_TIPO[m.caso.tipo] || m.caso.tipo)}${m.caso.sos ? ' · SOS' : ''} · ${esc(ASIG_TXT[m.estado] || m.estado)}</span>`).join('')}</div>` : ''}
       </div>`;
     }).join('');
-    return `<article class="sede" id="sede-${esc(s.id)}"><div class="sede-cab"><span class="sede-ico">${ico(info.i)}</span><b>${esc(s.nombre)}<small>${esc(info.n)}</small></b><span class="pill ${cls}">${plural(t.libres, 'libre', 'libres')} de ${t.total}</span></div>${filas}</article>`;
+    return `<article class="sede" id="sede-${esc(s.id)}"><div class="sede-cab"><span class="sede-ico">${ico(info.i)}</span><b>${esc(s.nombre)}<small>${esc(info.n)}</small></b><span class="pill ${cls}">${t.libres}/${t.total}</span></div>${filas}</article>`;
   }).join('');
 }
 function pintar(d, primera) {
