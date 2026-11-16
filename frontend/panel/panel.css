@@ -680,15 +680,3 @@ a.btn-sec { display: inline-flex; align-items: center; gap: 6px; text-decoration
 .v-pie dl div { display: flex; flex-direction: column; } .v-pie dt { color: #9fb3c0; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; } .v-pie dd { margin: 0; }
 .v-pie small { color: #8fa3b0; } .v-dim { float: right; color: #9fb3c0; font-size: 12px; }
 @media (max-width: 800px) { .v-herr a { display: none; } .v-pie small { display: none; } .v-pie { max-height: 28vh; } }
-
-/* Botones del cuadro del caso: no se cortan ni se montan (Pendiente, Atendido y papelera caben en una fila) */
-.pop .acciones { flex-wrap: wrap; }
-.pop .acciones button { flex: 1 1 0; min-width: 0; white-space: nowrap; }
-.pop .acciones button.recibir { flex: 1 1 100%; }
-.pop .acciones button.peligro { flex: 0 0 38px; padding: 4px 0; display: inline-flex; align-items: center; justify-content: center; }
-.pop .acciones button.peligro.confirmar { flex: 1 1 100%; padding: 4px 8px; }
-.pop .acciones button.peligro.confirmar .t { display: inline; }
-
-a.logo { text-decoration: none; color: inherit; cursor: pointer; border-radius: 8px; }
-a.logo:hover { opacity: .85; }
-a.logo:focus-visible { outline: 3px solid color-mix(in srgb, var(--marea) 35%, transparent); outline-offset: 3px; }

@@ -316,7 +316,7 @@ function detalleHtml(p) {
 }
 function popupIncidente(p) {
   const b = banda(p.prioridad);
-  const foto = (p.foto && /^\/uploads\/[0-9a-f-]+\.jpg$/.test(p.foto)) ? `<img src="${esc(p.foto)}" alt="Foto del reporte">` : '';
+  const foto = (p.foto && /^\/uploads\/[0-9a-f-]+\.jpg$/.test(p.foto)) ? `<button type="button" class="pop-foto" data-foto="${esc(p.id)}" title="Abrir la foto en calidad completa"><img src="${esc(p.foto)}" alt="Foto del reporte"><span>${ico('ampliar')}Ver en calidad completa</span></button>` : '';
   return `<div class="pop"><div class="pop-cab" style="--b:${b.c}"><span class="pop-prio">${esc(p.prioridad)}</span>
     <div><b>${esc(TIPO_NOMBRE[p.tipo] || p.tipo)}</b><span>Prioridad ${b.n.toLowerCase()}. ${esc(ESTADO_NOMBRE[p.estado] || p.estado)}.</span></div></div>
     ${p.descripcion ? `<p>${esc(p.descripcion)}</p>` : ''}${foto}
@@ -347,6 +347,92 @@ function marcadorIncidente(p, ll) {
   m.caso = p;
   return m;
 }
+
+// ---------- Visor de foto: calidad completa, zoom, datos de captura ----------
+const fotoValida = (p) => !!(p && p.foto && /^\/uploads\/[0-9a-f-]+\.jpg$/.test(p.foto));
+const fotoChip = (p) => fotoValida(p) ? `<button type="button" class="chip foto-chip" data-foto="${esc(p.id)}" title="Abrir la foto en calidad completa">${ico('camara')}Ver foto</button>` : '';
+function datosCaptura(p) {
+  const c = p.captura_info, f = (p.confianza_detalle || {}).foto || {}, filas = [];
+  const verificada = c ? c.nivel === 'verificada' : !!f.verificada;
+  const motivos = (c && c.motivos) || f.motivos || [];
+  filas.push(['Verificación', verificada ? 'Foto tomada en vivo con la cámara, en el lugar del reporte' : 'Sin prueba de que se tomara en el lugar' + (motivos.length ? ': ' + motivos.map((m) => MOTIVO_FOTO[m] || m).join('; ') : '')]);
+  if (c && c.t) filas.push(['Tomada el', new Date(c.t * 1000).toLocaleString('es-EC', { dateStyle: 'medium', timeStyle: 'medium' })]);
+  if (c && c.lat != null) filas.push(['Dónde se tomó', `${c.lat.toFixed(5)}, ${c.lon.toFixed(5)}` + (c.precision_m != null ? ` (±${c.precision_m} m)` : '')]);
+  const dist = c && c.distancia_m != null ? c.distancia_m : f.distancia_m;
+  if (dist != null) filas.push(['Distancia al reporte', dist + ' m']);
+  filas.push(['Reportado', p.creado_en ? new Date(p.creado_en).toLocaleString('es-EC', { dateStyle: 'medium', timeStyle: 'short' }) : '—']);
+  return { filas, verificada };
+}
+let visorEl = null, visorPrevio = null;
+function abrirVisor(id) {
+  const p = datosPorId[id]; if (!fotoValida(p)) return;
+  cerrarVisor(true);
+  visorPrevio = document.activeElement;
+  const { filas, verificada } = datosCaptura(p);
+  const el = visorEl = document.createElement('div');
+  el.className = 'visor'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-label', 'Foto del reporte');
+  el.innerHTML = `<div class="v-barra"><div class="v-tit"><b>${esc(TIPO_NOMBRE[p.tipo] || p.tipo)}</b><span class="v-ok ${verificada ? 'si' : 'no'}">${verificada ? 'Foto en vivo verificada' : 'Sin verificar'}</span></div>
+    <div class="v-herr"><button type="button" data-v="menos" aria-label="Alejar">−</button><button type="button" data-v="mas" aria-label="Acercar">+</button><button type="button" data-v="ajustar">Ajustar</button>
+    <a href="${esc(p.foto)}" target="_blank" rel="noopener">Original</a><a href="${esc(p.foto)}" download="nodo-caso-${esc(p.id)}.jpg">Descargar</a>
+    <button type="button" data-v="cerrar" class="v-x" aria-label="Cerrar">${ico('cerrar')}</button></div></div>
+    <div class="v-escena" tabindex="0"><img src="${esc(p.foto)}" alt="Foto del reporte en calidad completa" draggable="false"><i class="v-carga">Cargando foto…</i></div>
+    <div class="v-pie"><span class="v-dim"></span><dl>${filas.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl><small>Rueda o pellizco para acercar · arrastra para mover · doble toque para ampliar · Esc para cerrar</small></div>`;
+  document.body.appendChild(el);
+  const esc_ = el.querySelector('.v-escena'), img = el.querySelector('img');
+  let k = 1, kmin = 1, x = 0, y = 0;
+  const lim = () => {
+    const W = esc_.clientWidth, H = esc_.clientHeight, w = img.naturalWidth * k, h = img.naturalHeight * k;
+    x = w <= W ? (W - w) / 2 : Math.min(0, Math.max(W - w, x)); y = h <= H ? (H - h) / 2 : Math.min(0, Math.max(H - h, y));
+  };
+  const poner = () => { lim(); img.style.transform = `translate(${x}px,${y}px) scale(${k})`; };
+  const ajustar = () => { const W = esc_.clientWidth, H = esc_.clientHeight; kmin = Math.min(W / img.naturalWidth, H / img.naturalHeight, 1) || 1; k = kmin; poner(); };
+  const zoomEn = (nk, cx, cy) => { nk = Math.min(Math.max(nk, kmin), 8); x = cx - (cx - x) * (nk / k); y = cy - (cy - y) * (nk / k); k = nk; poner(); };
+  const centro = () => [esc_.clientWidth / 2, esc_.clientHeight / 2];
+  img.onload = () => { el.querySelector('.v-carga').remove(); img.style.opacity = 1; el.querySelector('.v-dim').textContent = `${img.naturalWidth} × ${img.naturalHeight} px`; ajustar(); };
+  img.onerror = () => { el.querySelector('.v-carga').textContent = 'No se pudo cargar la foto'; };
+  const ro = new ResizeObserver(() => { if (img.naturalWidth) { const era = k <= kmin + 1e-6; kmin = Math.min(esc_.clientWidth / img.naturalWidth, esc_.clientHeight / img.naturalHeight, 1) || 1; if (era) k = kmin; poner(); } }); ro.observe(esc_);
+  esc_.addEventListener('wheel', (e) => { e.preventDefault(); const r = esc_.getBoundingClientRect(); zoomEn(k * (e.deltaY < 0 ? 1.2 : 1 / 1.2), e.clientX - r.left, e.clientY - r.top); }, { passive: false });
+  const ptr = new Map(); let d0 = 0, k0 = 1, ult = 0;
+  esc_.addEventListener('pointerdown', (e) => {
+    esc_.setPointerCapture(e.pointerId); ptr.set(e.pointerId, [e.clientX, e.clientY]);
+    if (ptr.size === 2) { const [a, b] = [...ptr.values()]; d0 = Math.hypot(a[0] - b[0], a[1] - b[1]); k0 = k; }
+    const ahora = Date.now();
+    if (ptr.size === 1 && ahora - ult < 300) { const r = esc_.getBoundingClientRect(); if (k > kmin * 1.05) { k = kmin; poner(); } else zoomEn(Math.max(kmin * 2.5, 1), e.clientX - r.left, e.clientY - r.top); }
+    ult = ahora;
+  });
+  esc_.addEventListener('pointermove', (e) => {
+    const a = ptr.get(e.pointerId); if (!a) return;
+    if (ptr.size === 2) {
+      ptr.set(e.pointerId, [e.clientX, e.clientY]); const [p1, p2] = [...ptr.values()], r = esc_.getBoundingClientRect();
+      zoomEn(k0 * Math.hypot(p1[0] - p2[0], p1[1] - p2[1]) / (d0 || 1), (p1[0] + p2[0]) / 2 - r.left, (p1[1] + p2[1]) / 2 - r.top);
+    } else { x += e.clientX - a[0]; y += e.clientY - a[1]; ptr.set(e.pointerId, [e.clientX, e.clientY]); poner(); }
+  });
+  const suelta = (e) => ptr.delete(e.pointerId);
+  esc_.addEventListener('pointerup', suelta); esc_.addEventListener('pointercancel', suelta);
+  el.addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-v]'); if (!b) return;
+    const a = b.dataset.v;
+    if (a === 'cerrar') cerrarVisor(); else if (a === 'ajustar') ajustar(); else zoomEn(k * (a === 'mas' ? 1.4 : 1 / 1.4), ...centro());
+  });
+  el.onkeydown = (e) => {
+    if (e.key === 'Escape') { e.stopPropagation(); cerrarVisor(); }
+    else if (e.key === '+' || e.key === '=') zoomEn(k * 1.3, ...centro()); else if (e.key === '-') zoomEn(k / 1.3, ...centro());
+    else if (e.key === '0') ajustar();
+    else if (e.key === 'Tab') { const f = [...el.querySelectorAll('button, a, .v-escena')]; const i = f.indexOf(document.activeElement); e.preventDefault(); f[(i + (e.shiftKey ? -1 : 1) + f.length) % f.length].focus(); }
+  };
+  el._ro = ro; el.querySelector('.v-x').focus();
+}
+function cerrarVisor(sinFoco) {
+  if (!visorEl) return;
+  if (visorEl._ro) visorEl._ro.disconnect();
+  visorEl.remove(); visorEl = null;
+  if (!sinFoco && visorPrevio && visorPrevio.focus) { try { visorPrevio.focus(); } catch {} }
+}
+// Captura: el clic en la foto del popup o en «Ver foto» abre el visor sin disparar el vuelo de la lista
+document.addEventListener('click', (e) => {
+  const b = e.target.closest && e.target.closest('[data-foto]'); if (!b) return;
+  e.preventDefault(); e.stopPropagation(); abrirVisor(b.dataset.foto);
+}, true);
 
 // Información al pasar el cursor, con triángulo de alerta cuando hay que tener cuidado
 const TT = { sticky: true, direction: 'top', offset: [0, -6], opacity: 1, className: 'tt-nodo' };
@@ -436,12 +522,60 @@ function pintarCapas(zonas, vias, albergues, servicios, incidentes) {
     L.polyline(ll, { color: bloq ? '#B42318' : '#E0A030', weight: 6, lineCap: 'round', lineJoin: 'round', dashArray: bloq ? '10 8' : null }).bindTooltip(tooltipPeligro(f.properties, bloq), TT).addTo(capas.incidentes);
   }
   datosPorId = {};
-  L.geoJSON(incidentes, {
-    pointToLayer: (f, ll) => { const m = marcadorIncidente(f.properties, ll); porId[f.properties.id] = m; datosPorId[f.properties.id] = f.properties; return m; },
-    onEachFeature: (f, l) => l.bindPopup(popupIncidente(f.properties), { minWidth: 250, maxWidth: 290, maxHeight: 420 }),
-  }).addTo(capas.incidentes);
+  pinesInc = [];
+  for (const f of (incidentes && incidentes.features) || []) {
+    if (!f.geometry || f.geometry.type !== 'Point') continue;
+    const [lo, la] = f.geometry.coordinates, ll = L.latLng(la, lo);
+    const m = marcadorIncidente(f.properties, ll);
+    m.bindPopup(popupIncidente(f.properties), { minWidth: 250, maxWidth: 290, maxHeight: 420 });
+    porId[f.properties.id] = m; datosPorId[f.properties.id] = f.properties;
+    pinesInc.push(m);
+  }
+  agrupar();
   return porId;
 }
+
+// Agrupación por cercanía: con el mapa alejado los casos próximos se juntan en un círculo con su cantidad
+// (color = prioridad más alta del grupo; late si hay un SOS). Al acercar a zoom 16 o más se ven los pines uno a uno.
+let pinesInc = [], visiblesAgr = [];
+const ZOOM_SIN_AGRUPAR = 16, RADIO_AGRUPAR = 58;
+function agrupar() {
+  for (const l of visiblesAgr) { if (l.isPopupOpen && l.isPopupOpen()) continue; capas.incidentes.removeLayer(l); }
+  const abiertos = visiblesAgr.filter((l) => l.isPopupOpen && l.isPopupOpen());
+  visiblesAgr = abiertos;
+  const z = mapa.getZoom();
+  const libres = pinesInc.filter((m) => !abiertos.includes(m));
+  if (z >= ZOOM_SIN_AGRUPAR) { for (const m of libres) { capas.incidentes.addLayer(m); visiblesAgr.push(m); } return; }
+  const pts = libres.map((m) => ({ m, xy: mapa.project(m.getLatLng(), z) }))
+    .sort((a, b) => ((b.m.caso.sos ? 1000 : 0) + (b.m.caso.prioridad || 0)) - ((a.m.caso.sos ? 1000 : 0) + (a.m.caso.prioridad || 0)));
+  const usado = new Set();
+  for (const a of pts) {
+    if (usado.has(a)) continue;
+    usado.add(a);
+    const grupo = [a];
+    for (const b of pts) if (!usado.has(b) && a.xy.distanceTo(b.xy) <= RADIO_AGRUPAR) { usado.add(b); grupo.push(b); }
+    const capa = grupo.length === 1 ? a.m : marcadorGrupo(grupo.map((g) => g.m));
+    capas.incidentes.addLayer(capa); visiblesAgr.push(capa);
+  }
+}
+function marcadorGrupo(ms) {
+  const casos = ms.map((m) => m.caso), act = casos.filter((c) => c.estado !== 'atendido');
+  const maxP = Math.max(0, ...(act.length ? act : casos).map((c) => c.prioridad || 0)), b = banda(maxP);
+  const sos = act.some((c) => c.sos), lim = L.latLngBounds(ms.map((m) => m.getLatLng()));
+  const d = 40 + Math.min(22, Math.round(Math.log2(ms.length) * 7));
+  const por = {}; casos.forEach((c) => { por[c.tipo] = (por[c.tipo] || 0) + 1; });
+  const detalle = Object.entries(por).sort((x, y) => y[1] - x[1]).slice(0, 4).map(([t, n]) => `${n} ${TIPO_NOMBRE[t] || t}`).join(', ');
+  const m = L.marker(lim.getCenter(), {
+    icon: L.divIcon({ className: 'mk-wrap', iconSize: [d, d], iconAnchor: [d / 2, d / 2],
+      html: `<div class="grupo${sos ? ' sos' : ''}" style="--b:${b.c};width:${d}px;height:${d}px"><b>${ms.length}</b></div>` }),
+    zIndexOffset: Math.round(maxP) * 10 + (sos ? 10000 : 0) + 500, keyboard: true, title: `${ms.length} casos en esta zona`,
+  });
+  m.bindTooltip(ttHtml(b.c, sos, `${ms.length} casos en esta zona`, detalle, `Prioridad más alta: ${maxP} (${b.n.toLowerCase()})${sos ? ' · incluye SOS' : ''}`, 'Toca para acercar'), TT);
+  m.on('click', () => { mapa.closePopup(); mapa.flyToBounds(lim, { padding: [70, 70], maxZoom: ZOOM_SIN_AGRUPAR, duration: 0.8 }); });
+  m.esGrupo = true;
+  return m;
+}
+mapa.on('zoomend', () => { if (!popupAbierto) agrupar(); });
 
 // Hace clicable (ratón y teclado) una fila de la lista
 function activar(li, fn) {
@@ -460,7 +594,7 @@ function filaCaso(p, porId) {
     <div class="cuerpo"><div class="titulo">${ico(TIPO_ICO[p.tipo] || 'otro')}${esc(TIPO_NOMBRE[p.tipo] || p.tipo)}</div>
     <p class="desc">${esc(p.descripcion || 'Sin descripción')}</p>
     <div class="datos">${p.sos ? '<span class="chip sos-chip">SOS</span>' : ''}${p.peligro ? `<span class="chip peligro-chip">${ico('peligro')}Peligro en la vía</span>` : ''}<span class="chip"><i class="punto" style="--c:${FUENTE[p.fuente] || '#777'}"></i>${esc(FUENTE_NOMBRE[p.fuente] || p.fuente)}</span>
-    <span class="chip">${esc(ESTADO_NOMBRE[p.estado] || p.estado)}</span><span class="chip">${ico('personas')}${esc(p.personas_afectadas)}</span>${verifChip(p)}${unidadesChips(p)}
+    <span class="chip">${esc(ESTADO_NOMBRE[p.estado] || p.estado)}</span><span class="chip">${ico('personas')}${esc(p.personas_afectadas)}</span>${verifChip(p)}${fotoChip(p)}${unidadesChips(p)}
     ${recibidoCaso(p) ? `<span class="chip recibido-chip">${ico('ok-circulo')}Recibido</span>` : `<button type="button" class="recibir recibir-fila" data-recibido="${esc(p.id)}" title="Avisa a la persona que su reporte llegó">${ico('ok-circulo')}Marcar recibido</button>`}</div></div>`;
   if (p.estado !== 'atendido' && !p.peligro) {
     const cuerpo = li.querySelector('.cuerpo'); cuerpo.insertAdjacentHTML('beforeend', `<div class="dueno-fila">${duenoChip(p)}</div>` + recomendadasChips(p));
@@ -650,7 +784,7 @@ function enfocar(m) {
   const destino = mapa.unproject(mapa.project(ll, ZOOM).add([0, -mapa.getSize().y * 0.15]), ZOOM);
   const reducir = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   let abierto = false;
-  const abrir = () => { if (abierto || id !== vueloId) return; abierto = true; m.openPopup(); };
+  const abrir = () => { if (abierto || id !== vueloId) return; abierto = true; if (!mapa.hasLayer(m)) agrupar(); m.openPopup(); };
   if (reducir) { mapa.setView(destino, ZOOM, { animate: false }); abrir(); return; }
   mapa.once('moveend', abrir);
   mapa.flyTo(destino, ZOOM, { duration: 1.2, easeLinearity: 0.25 });
@@ -660,7 +794,7 @@ function enfocar(m) {
 // Mientras hay un popup abierto no se redibuja el mapa (si no, se cierra solo cada 10 s)
 let popupAbierto = false;
 mapa.on('popupopen', () => { popupAbierto = true; });
-mapa.on('popupclose', () => { popupAbierto = false; if (pendiente) { pendiente = false; cargar(); } });
+mapa.on('popupclose', () => { popupAbierto = false; if (pendiente) { pendiente = false; cargar(); } else agrupar(); });
 
 let cargando = false, repetir = false, pendiente = false, nuevoId = null;
 
