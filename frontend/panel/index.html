@@ -78,6 +78,12 @@
       </div>
       <div id="vista-casos">
         <div id="resumen" class="resumen" aria-label="Casos abiertos por prioridad"></div>
+        <div class="busca" role="search">
+          <input id="bus-q" type="search" placeholder="Buscar caso: texto, tipo, # o unidad" aria-label="Buscar casos" autocomplete="off">
+          <select id="bus-tipo" aria-label="Filtrar por tipo"><option value="">Todos los tipos</option></select>
+          <select id="bus-estado" aria-label="Filtrar por estado"><option value="">Todos los estados</option><option value="sin_recibir">Sin recibir</option><option value="pendiente">Pendiente</option><option value="en_proceso">En proceso</option></select>
+          <div class="bus-pie"><span id="bus-cuenta" hidden aria-live="polite"></span><button type="button" id="bus-limpiar" hidden>Limpiar</button></div>
+        </div>
         <div id="filtro-casos" class="filtro" role="group" aria-label="Filtrar casos por responsable"></div>
         <h2>Casos por prioridad</h2>
         <ul id="lista" class="casos"></ul>

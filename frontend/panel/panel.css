@@ -729,3 +729,25 @@ details.bit summary { cursor: pointer; font-weight: 600; font-size: 13px; }
 .bit-vacio { color: #78909C; }
 .bit-nueva { display: flex; gap: 6px; } .bit-nueva input { flex: 1; min-width: 0; font: inherit; padding: 6px 8px; border: 1px solid #B8C6CE; border-radius: 6px; }
 .bit-nueva button { flex: none; }
+
+/* La barra de desplazamiento del cuadro del caso empieza debajo de la (X) y queda separada del contenido */
+.leaflet-popup-content::-webkit-scrollbar { width: 8px; }
+.leaflet-popup-content::-webkit-scrollbar-track { margin: 26px 0 8px; background: transparent; }
+.leaflet-popup-content::-webkit-scrollbar-thumb { border: 2px solid transparent; background-clip: padding-box; }
+.leaflet-popup-content .pop { padding-right: 10px; }
+.leaflet-popup-close-button { z-index: 2; }
+
+/* Búsqueda y alerta por tiempo */
+.busca { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 10px; }
+.busca input { grid-column: 1 / -1; }
+.busca input, .busca select { min-width: 0; padding: 7px 10px; border: 1.5px solid var(--linea-2); border-radius: 9px; background: var(--superficie); color: var(--tinta); font: inherit; font-size: 13.5px; }
+.busca input:focus-visible, .busca select:focus-visible { outline: 3px solid color-mix(in srgb, var(--marea) 30%, transparent); outline-offset: 1px; border-color: var(--marea); }
+.bus-pie { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; color: var(--tinta-2); }
+.bus-pie[hidden], .bus-pie > [hidden] { display: none; }
+.bus-pie button { border: 0; background: none; color: var(--marea); font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; padding: 4px; }
+.chip.espera { background: #FFF1CF; border-color: #F2C46D; color: #7A5200; }
+.chip.espera.vencida { background: #FBEAE8; border-color: #E9A9A3; color: #B42318; font-weight: 700; animation: espera-late 1.4s ease-in-out infinite; }
+@keyframes espera-late { 50% { box-shadow: 0 0 0 4px rgba(224,30,37,.18); } }
+li.caso.vencido { outline: 2px solid #E9A9A3; outline-offset: -2px; }
+@media (prefers-reduced-motion: reduce) { .chip.espera.vencida { animation: none; } }
+.bus-pie:not(:has(> :not([hidden]))) { display: none; }

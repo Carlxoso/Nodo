@@ -653,16 +653,21 @@ function activar(li, fn) {
   li.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); } };
 }
 
+// Tiempo máximo sin que nadie reciba un caso: 5 minutos (2 si es SOS). Pasado ese tiempo se marca en rojo, suena y se avisa cada 2 minutos.
+const LIMITE_RECIBIR_MIN = 5, LIMITE_SOS_MIN = 2;
+const esperaMin = (p) => (p.estado === 'pendiente' && !recibidoCaso(p) && p.creado_en) ? minDesde(p.creado_en) : null;
+const vencido = (p) => { const m = esperaMin(p); return m != null && m >= (p.sos ? LIMITE_SOS_MIN : LIMITE_RECIBIR_MIN); };
+const esperaChip = (p) => { const m = esperaMin(p); return m == null || m < 1 ? '' : `<span class="chip espera${vencido(p) ? ' vencida' : ''}" title="Tiempo que lleva sin que nadie lo reciba">${ico('alerta')}Sin recibir hace ${m} min</span>`; };
 function filaCaso(p, porId) {
   const b = banda(p.prioridad);
   const li = document.createElement('li');
-  li.className = 'caso' + (p.sos ? ' sos' : '');
+  li.className = 'caso' + (p.sos ? ' sos' : '') + (vencido(p) ? ' vencido' : '');
   li.dataset.id = p.id;
   li.style.setProperty('--b', b.c);
   li.innerHTML = `<div class="prio"><span class="num">${esc(p.prioridad)}</span><span>${b.n}</span></div>
     <div class="cuerpo"><div class="titulo">${ico(TIPO_ICO[p.tipo] || 'otro')}${esc(TIPO_NOMBRE[p.tipo] || p.tipo)}</div>
     <p class="desc">${esc(p.descripcion || 'Sin descripción')}</p>
-    <div class="datos">${p.sos ? '<span class="chip sos-chip">SOS</span>' : ''}${p.peligro ? `<span class="chip peligro-chip">${ico('peligro')}Peligro en la vía</span>` : ''}<span class="chip"><i class="punto" style="--c:${FUENTE[p.fuente] || '#777'}"></i>${esc(FUENTE_NOMBRE[p.fuente] || p.fuente)}</span>
+    <div class="datos">${esperaChip(p)}${p.sos ? '<span class="chip sos-chip">SOS</span>' : ''}${p.peligro ? `<span class="chip peligro-chip">${ico('peligro')}Peligro en la vía</span>` : ''}<span class="chip"><i class="punto" style="--c:${FUENTE[p.fuente] || '#777'}"></i>${esc(FUENTE_NOMBRE[p.fuente] || p.fuente)}</span>
     <span class="chip">${esc(ESTADO_NOMBRE[p.estado] || p.estado)}</span><span class="chip">${ico('personas')}${esc(p.personas_afectadas)}</span>${verifChip(p)}${fotoChip(p)}${ayudaConfChip(p)}${unidadesChips(p)}
     ${recibidoCaso(p) ? `<span class="chip recibido-chip">${ico('ok-circulo')}Recibido</span>` : `<button type="button" class="recibir recibir-fila" data-recibido="${esc(p.id)}" title="Avisa a la persona que su reporte llegó">${ico('ok-circulo')}Marcar recibido</button>`}</div></div>`;
   if (p.estado !== 'atendido' && !p.peligro) {
@@ -693,6 +698,8 @@ function filaMin(p, porId) {
 
 let filtroCasos = 'todos';
 try { const f = localStorage.getItem('nodo_filtro_casos'); if (['todos', 'mios', 'libres'].includes(f)) filtroCasos = f; } catch {}
+let ultimosCasos = null;
+const busca = { q: '', tipo: '', estado: '' };
 function pintarLista(incidentes, porId) {
   const items = incidentes.features.map((f) => f.properties);
   const reciente = (a, b) => new Date(b.creado_en) - new Date(a.creado_en);
@@ -712,12 +719,25 @@ function pintarLista(incidentes, porId) {
   fc.innerHTML = [['todos', 'Todos', abiertos.length], ['mios', 'Míos', nMios], ['libres', 'Sin dueño', nLibres]].map(([k, t, n]) =>
     `<button type="button" data-f="${k}" aria-pressed="${filtroCasos === k}" class="${k === 'libres' && n ? 'hay' : ''}">${t} <span class="num">${n}</span></button>`).join('');
   fc.querySelectorAll('button').forEach((b) => { b.onclick = () => { filtroCasos = b.dataset.f; try { localStorage.setItem('nodo_filtro_casos', filtroCasos); } catch {} pintarLista(incidentes, porId); }; });
-  const visibles = abiertos.filter((p) => filtroCasos === 'mios' ? esMio(p) : filtroCasos === 'libres' ? (!p.atiende && !p.peligro) : true);
+  ultimosCasos = { items: abiertos, args: [incidentes, porId] };
+  const sel = document.getElementById('bus-tipo'), tiposPresentes = [...new Set(abiertos.map((p) => p.tipo))].sort();
+  if (sel && sel.dataset.tipos !== tiposPresentes.join()) { // solo ofrece los tipos que hay en la lista
+    sel.dataset.tipos = tiposPresentes.join();
+    sel.innerHTML = '<option value="">Todos los tipos</option>' + tiposPresentes.map((t) => `<option value="${esc(t)}"${t === busca.tipo ? ' selected' : ''}>${esc(TIPO_NOMBRE[t] || t)}</option>`).join('');
+  }
+  const norm = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const q = norm(busca.q).replace(/^#/, '');
+  const coincide = (p) => (!busca.tipo || p.tipo === busca.tipo) && (!busca.estado || (busca.estado === 'sin_recibir' ? esperaMin(p) != null : p.estado === busca.estado))
+    && (!q || String(p.id) === q || norm(`${TIPO_NOMBRE[p.tipo] || p.tipo} ${p.descripcion || ''} ${(p.atiende && p.atiende.nombre) || ''} ${(p.asignaciones || []).map((a) => unidadNombre(a)).join(' ')}`).includes(q));
+  const hayBusca = !!(busca.q || busca.tipo || busca.estado);
+  const visibles = abiertos.filter((p) => (filtroCasos === 'mios' ? esMio(p) : filtroCasos === 'libres' ? (!p.atiende && !p.peligro) : true) && coincide(p));
+  const cb = document.getElementById('bus-cuenta'); if (cb) { cb.hidden = !hayBusca; cb.textContent = `Mostrando ${visibles.length} de ${abiertos.length}`; }
+  const lb = document.getElementById('bus-limpiar'); if (lb) lb.hidden = !hayBusca;
 
   const ul = document.getElementById('lista');
   ul.textContent = '';
   if (!visibles.length) {
-    ul.innerHTML = `<li class="vacio">${abiertos.length ? (filtroCasos === 'mios' ? 'No tienes casos asignados. Toma uno de «Sin dueño».' : 'Todos los casos abiertos ya tienen quién los atienda.') : atendidos.length ? 'No hay casos abiertos. Todos están atendidos.' : 'No hay casos reportados. Cuando llegue uno, aparecerá aquí.'}</li>`;
+    ul.innerHTML = `<li class="vacio">${abiertos.length && (busca.q || busca.tipo || busca.estado) ? 'Ningún caso coincide con la búsqueda.' : abiertos.length ? (filtroCasos === 'mios' ? 'No tienes casos asignados. Toma uno de «Sin dueño».' : 'Todos los casos abiertos ya tienen quién los atienda.') : atendidos.length ? 'No hay casos abiertos. Todos están atendidos.' : 'No hay casos reportados. Cuando llegue uno, aparecerá aquí.'}</li>`;
   }
   for (const p of visibles) ul.appendChild(filaCaso(p, porId));
 
@@ -937,6 +957,28 @@ function bannerCaso(p, total) {
   el.querySelector('.ac-ver').onclick = () => { cerrar(); const m = ultimoPorId[String(p.id)]; if (m) enfocar(m); };
   clearTimeout(tBanner); tBanner = setTimeout(cerrar, 30000);
 }
+// Casos que nadie ha recibido a tiempo: refresca los minutos y, cada 2 minutos, suena y avisa
+let ultimoAvisoVenc = 0;
+function vigilarVencidos() {
+  if (!ultimosCasos) return;
+  const sinRecibir = ultimosCasos.items.filter((p) => esperaMin(p) != null);
+  if (!sinRecibir.length) return;
+  pintarLista(...ultimosCasos.args); // actualiza «hace N min»
+  const venc = sinRecibir.filter(vencido).sort((a, b) => new Date(a.creado_en) - new Date(b.creado_en));
+  if (!venc.length || Date.now() - ultimoAvisoVenc < 120000) return;
+  ultimoAvisoVenc = Date.now();
+  if (sonidoOn) { const c = ctxAudio(); if (c && c.state === 'running') { const t = c.currentTime + 0.02; for (let k = 0; k < 3; k++) tono(c, 520, t + k * 0.35, 0.3, 0.22, 'square'); } }
+  const el = document.getElementById('aviso-caso'); if (!el) return;
+  const p = venc[0];
+  el.innerHTML = `<div class="ac-t">${ico('alerta')}<b>${venc.length === 1 ? '1 caso sin recibir' : `${venc.length} casos sin recibir`}</b><button type="button" class="ac-x" aria-label="Cerrar aviso">${ico('cerrar')}</button></div>
+    <p class="ac-p">El más antiguo lleva <b>${esperaMin(p)} min</b>: ${esc(TIPO_NOMBRE[p.tipo] || p.tipo)}${p.sos ? ' (SOS)' : ''}.</p><button type="button" class="ac-ver">Ver el más antiguo</button>`;
+  el.hidden = false; el.classList.add('sos');
+  const cerrar = () => { el.hidden = true; el.classList.remove('sos'); clearTimeout(tBanner); };
+  el.querySelector('.ac-x').onclick = cerrar;
+  el.querySelector('.ac-ver').onclick = () => { cerrar(); const m = ultimoPorId[String(p.id)]; if (m) enfocar(m); };
+  clearTimeout(tBanner); tBanner = setTimeout(cerrar, 30000);
+}
+setInterval(vigilarVencidos, 30000);
 const conocidos = new Set(); let primeraCarga = true;
 function avisarNuevos(inc) {
   const nuevos = inc.features.map((f) => f.properties).filter((p) => !conocidos.has(p.id));
@@ -1959,3 +2001,14 @@ function avisoCancelado() {
   t.style.opacity = '1';
   clearTimeout(t._t); t._t = setTimeout(() => { t.style.opacity = '0'; }, 5000);
 }
+
+// Búsqueda y filtros de la lista de casos
+(() => {
+  const q = document.getElementById('bus-q'), tp = document.getElementById('bus-tipo'), es = document.getElementById('bus-estado'), lm = document.getElementById('bus-limpiar');
+  if (!q) return;
+  const repintar = () => { if (ultimosCasos) pintarLista(...ultimosCasos.args); };
+  q.addEventListener('input', () => { busca.q = q.value.trim(); repintar(); });
+  tp.addEventListener('change', () => { busca.tipo = tp.value; repintar(); });
+  es.addEventListener('change', () => { busca.estado = es.value; repintar(); });
+  lm.addEventListener('click', () => { busca.q = busca.tipo = busca.estado = ''; q.value = ''; tp.value = ''; es.value = ''; repintar(); q.focus(); });
+})();
