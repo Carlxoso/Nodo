@@ -34,7 +34,7 @@ app.use(cors());
 const usuarioDeToken = (req) => { const m = (req.headers.authorization || '').match(/^Bearer (.+)$/); const p = m && verificarToken(m[1]); return p && ['operador', 'admin', 'inst_policia', 'inst_salud', 'inst_bomberos'].includes(p.rol) ? p.sub : null; };
 app.use('/api', limitar({ ventanaMs: 60_000, max: 3000, clave: (req) => 'u' + usuarioDeToken(req), omitir: (req) => !usuarioDeToken(req) }));
 app.use('/api', limitar({ ventanaMs: 60_000, max: 600, omitir: (req) => !!usuarioDeToken(req) }));
-app.use(express.json({ limit: '5mb' })); // las fotos llegan a 1600 px (~300-600 KB) en base64
+app.use(express.json({ limit: '2mb' })); // las fotos llegan reducidas (~100-200 KB) en base64
 montarRutas(app, pool);
 
 // Fotos de reportes (se guardan como archivo; la BD guarda solo la ruta)
@@ -61,7 +61,7 @@ const CAPAS = {
   vias:      { tabla: 'vias',                 props: ['id', 'nombre', 'estado', 'fuente'] },
   albergues: { tabla: 'albergues',            props: ['id', 'nombre', 'capacidad', 'ocupacion', 'servicios', 'fuente'] },
   servicios: { tabla: 'servicios_esenciales', props: ['id', 'tipo', 'nombre'] },
-  incidentes:{ extra: `${ASIGNACIONES_SQL}, 'captura_info', (t.captura - 'hash' - 'nonce')`, tabla: 'incidentes',           props: ['id', 'tipo', 'descripcion', 'gravedad', 'personas_afectadas', 'estado', 'fuente', 'confianza', 'prioridad', 'prioridad_desglose', 'creado_en', 'foto', 'confianza_detalle', 'sos', 'peligro', 'tramo', 'recibido_en'] },
+  incidentes:{ extra: ASIGNACIONES_SQL, tabla: 'incidentes',           props: ['id', 'tipo', 'descripcion', 'gravedad', 'personas_afectadas', 'estado', 'fuente', 'confianza', 'prioridad', 'prioridad_desglose', 'creado_en', 'foto', 'confianza_detalle', 'sos', 'peligro', 'tramo', 'recibido_en'] },
 };
 
 async function featureCollection({ tabla, props, extra }) {
@@ -681,8 +681,8 @@ app.post('/api/incidentes', autenticarOpcional, async (req, res) => {
   // Foto opcional: solo JPEG en base64 (la PWA la re-codifica en un canvas, lo que elimina los metadatos EXIF)
   let fotoBuf = null;
   if (foto) {
-    if (typeof foto !== 'string' || foto.length > 3_500_000 || !/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(foto))
-      return res.status(400).json({ error: 'foto inválida (solo JPEG, máx. ~2,5 MB)' });
+    if (typeof foto !== 'string' || foto.length > 1_500_000 || !/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(foto))
+      return res.status(400).json({ error: 'foto inválida (solo JPEG, máx. ~1 MB)' });
     fotoBuf = Buffer.from(foto.split(',')[1], 'base64');
     if (fotoBuf.length < 4 || fotoBuf[0] !== 0xff || fotoBuf[1] !== 0xd8 || fotoBuf[2] !== 0xff)
       return res.status(400).json({ error: 'la foto no es un JPEG válido' });

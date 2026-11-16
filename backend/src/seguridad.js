@@ -11,17 +11,18 @@ function cabeceras(_req, res, next) {
   next();
 }
 
-// limitar({ ventanaMs, max }): máximo de peticiones por IP dentro de la ventana
-function limitar({ ventanaMs, max, mensaje = 'demasiadas peticiones, intenta más tarde' }) {
+// limitar({ ventanaMs, max, clave, omitir }): máximo de peticiones por clave (por defecto la IP) dentro de la ventana
+function limitar({ ventanaMs, max, mensaje = 'demasiadas peticiones, intenta más tarde', clave = (req) => req.ip, omitir = () => false }) {
   const hits = new Map();
   setInterval(() => {
     const ahora = Date.now();
     for (const [k, v] of hits) if (v.reset < ahora) hits.delete(k);
   }, ventanaMs).unref();
   return (req, res, next) => {
-    const ahora = Date.now();
-    let h = hits.get(req.ip);
-    if (!h || h.reset < ahora) { h = { n: 0, reset: ahora + ventanaMs }; hits.set(req.ip, h); }
+    if (omitir(req)) return next();
+    const k = clave(req), ahora = Date.now();
+    let h = hits.get(k);
+    if (!h || h.reset < ahora) { h = { n: 0, reset: ahora + ventanaMs }; hits.set(k, h); }
     if (++h.n > max) {
       res.set('Retry-After', String(Math.ceil((h.reset - ahora) / 1000)));
       return res.status(429).json({ error: mensaje });

@@ -627,3 +627,22 @@ a.btn-sec { display: inline-flex; align-items: center; gap: 6px; text-decoration
   .login form { padding: 22px; }
 }
 @media (max-width: 800px) { .leaflet-popup-content { max-height: 52dvh; overflow-y: auto; overscroll-behavior: contain; } }
+
+/* ---------- Quién atiende ---------- */
+.filtro { display: flex; gap: 6px; margin-top: 10px; }
+.filtro button { flex: 1; padding: 6px 8px; border: 1.5px solid var(--linea-2); border-radius: 9px; background: var(--superficie); color: var(--tinta-2); font: 600 13px var(--fuente); cursor: pointer; }
+.filtro button .num { font-weight: 700; color: var(--tinta); }
+.filtro button[aria-pressed="true"] { background: var(--marea); border-color: var(--marea); color: #fff; }
+.filtro button[aria-pressed="true"] .num { color: #fff; }
+.filtro button.hay:not([aria-pressed="true"]) { border-color: var(--p-alta, #D9622B); }
+.dueno-fila { margin-top: 8px; }
+.chip.dueno { background: #fff; }
+.chip.dueno.mio { background: #E3F2EA; border-color: #B6DCC6; color: #1F5E42; font-weight: 600; }
+.tomar { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px 5px 9px; border: 1.5px dashed var(--marea); border-radius: 999px; background: #fff; color: var(--marea-osc); font: 700 13px var(--fuente); cursor: pointer; }
+.tomar:hover { background: var(--marea-claro); }
+.tomar .ic { width: 15px; height: 15px; }
+.dueno-pop { display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 8px 10px; border-radius: 8px; font-size: 13px; background: #F3F5F7; }
+.dueno-pop span { flex: 1; } .dueno-pop .ic { width: 15px; height: 15px; vertical-align: -3px; margin-right: 4px; }
+.dueno-pop button { flex: none; padding: 5px 10px; border: 1.5px solid var(--marea); border-radius: 8px; background: #fff; color: var(--marea-osc); font: 700 13px var(--fuente); cursor: pointer; }
+.dueno-pop.mio { background: #E3F2EA; }
+.dueno-pop.otro { background: #FFF1D6; }

@@ -241,6 +241,30 @@ function recomendadasChips(p) {
   const r = recomendar(p); if (!r.length) return '';
   return `<div class="rec" aria-label="Unidades recomendadas"><span class="rec-t">Enviar:</span>` + r.map((x) => `<button type="button" class="rec-chip${x.apoyo ? ' apoyo' : ''}${x.hecha ? ' hecha' : ''}" data-rec="${esc(p.id)}" data-rec-u="${esc(x.unidad)}" title="${esc(x.motivo)}">${x.hecha ? ico('ok-circulo') : ico(UNIDADES[x.unidad] ? UNIDADES[x.unidad][1] : 'otro')}${esc(unidadTxt(x.unidad))}</button>`).join('') + '</div>';
 }
+// ---------- Quién atiende el caso (varios operadores sin pisarse) ----------
+const esMio = (p) => !!(p.atiende && usuarioActual && p.atiende.id === usuarioActual.id);
+const horaCorta = (iso) => { try { return new Date(iso).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' }); } catch { return ''; } };
+function duenoChip(p) {
+  if (p.atiende) return `<span class="chip dueno${esMio(p) ? ' mio' : ''}" title="Atiende desde las ${esc(horaCorta(p.atiende.desde))}">${ico('personas')}${esMio(p) ? 'Lo atiendes tú' : 'Atiende: ' + esc(p.atiende.nombre)}</span>`;
+  return `<button type="button" class="tomar tomar-fila" data-tomar="${esc(p.id)}">${ico('ok-circulo')}<span>Tomar caso</span></button>`;
+}
+function duenoPopup(p) {
+  if (p.estado === 'atendido') return '';
+  if (!p.atiende) return `<div class="dueno-pop libre"><span>Nadie lo atiende todavía.</span><button type="button" data-tomar="${esc(p.id)}">Tomar caso</button></div>`;
+  if (esMio(p)) return `<div class="dueno-pop mio"><span>${ico('ok-circulo')}Lo atiendes tú desde las ${esc(horaCorta(p.atiende.desde))}</span><button type="button" data-soltar="${esc(p.id)}">Soltar</button></div>`;
+  return `<div class="dueno-pop otro"><span>${ico('alerta')}Lo atiende <b>${esc(p.atiende.nombre)}</b> desde las ${esc(horaCorta(p.atiende.desde))}<br>Coordínate antes de enviar unidades.</span><button type="button" data-tomar="${esc(p.id)}" data-forzar="1">Tomarlo yo</button></div>`;
+}
+async function tomarCaso(id, forzar) {
+  const r = await fetch(`/api/incidentes/${id}/tomar`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify({ forzar: !!forzar }) });
+  if (r.status === 401 || r.status === 403) { guardarToken(null); mostrarLogin(); throw new Error('auth'); }
+  if (r.status === 409) { const d = await r.json().catch(() => ({})); if (!window.confirm(`Este caso lo atiende ${d.atiende && d.atiende.nombre ? d.atiende.nombre : 'otra persona'}. ¿Quieres tomarlo tú?`)) return; return tomarCaso(id, true); }
+  if (!r.ok) throw new Error('error');
+}
+async function accionDueno(btn, hacer) {
+  btn.disabled = true;
+  try { await hacer(); mapa.closePopup(); cargar(); }
+  catch (e) { if (e.message !== 'auth') alert('No se pudo actualizar quién atiende el caso. Intenta de nuevo.'); btn.disabled = false; }
+}
 const ASIG_ESTADO = { en_camino: 'En camino', en_sitio: 'En el sitio' };
 const unidadNombre = (a) => (UNIDADES[a.unidad] ? UNIDADES[a.unidad][0] : a.unidad) + (a.nombre ? ` ${a.nombre}` : '');
 function unidadesChips(p) {
@@ -298,7 +322,7 @@ function popupIncidente(p) {
     ${p.descripcion ? `<p>${esc(p.descripcion)}</p>` : ''}${foto}
     <div class="datos"><span class="chip">${ico('alerta')}Gravedad ${esc(p.gravedad)} de 5</span><span class="chip">${ico('personas')}${esc(p.personas_afectadas)} afectadas</span>
     <span class="chip"><i class="punto" style="--c:${FUENTE[p.fuente] || '#777'}"></i>${esc(FUENTE_NOMBRE[p.fuente] || p.fuente)}</span><span class="chip">Confianza ${esc(p.confianza)}</span></div>
-    ${unidadesHtml(p)}${accionesHtml(p)}</div>`;
+    ${duenoPopup(p)}${unidadesHtml(p)}${accionesHtml(p)}</div>`;
 }
 
 // Marcador en forma de pin (gota roja) con el ícono del tipo de caso; el tamaño indica la prioridad y el punto la fuente.
@@ -439,7 +463,9 @@ function filaCaso(p, porId) {
     <span class="chip">${esc(ESTADO_NOMBRE[p.estado] || p.estado)}</span><span class="chip">${ico('personas')}${esc(p.personas_afectadas)}</span>${verifChip(p)}${unidadesChips(p)}
     ${recibidoCaso(p) ? `<span class="chip recibido-chip">${ico('ok-circulo')}Recibido</span>` : `<button type="button" class="recibir recibir-fila" data-recibido="${esc(p.id)}" title="Avisa a la persona que su reporte llegó">${ico('ok-circulo')}Marcar recibido</button>`}</div></div>`;
   if (p.estado !== 'atendido' && !p.peligro) {
-    const cuerpo = li.querySelector('.cuerpo'); cuerpo.insertAdjacentHTML('beforeend', recomendadasChips(p));
+    const cuerpo = li.querySelector('.cuerpo'); cuerpo.insertAdjacentHTML('beforeend', `<div class="dueno-fila">${duenoChip(p)}</div>` + recomendadasChips(p));
+    const tb = cuerpo.querySelector('button[data-tomar]');
+    if (tb) { tb.onclick = (e) => { e.stopPropagation(); accionDueno(tb, () => tomarCaso(tb.dataset.tomar, false)); }; tb.onkeydown = (e) => e.stopPropagation(); }
     cuerpo.querySelectorAll('button[data-rec]').forEach((b) => { b.onclick = (e) => { e.stopPropagation(); window._unidadPref = { id: b.dataset.rec, unidad: b.dataset.recU }; const m = porId[b.dataset.rec]; if (m) enfocar(m); }; b.onkeydown = (e) => e.stopPropagation(); });
   }
   activar(li, () => { const m = porId[p.id]; if (m) enfocar(m); });
@@ -462,10 +488,13 @@ function filaMin(p, porId) {
   return li;
 }
 
+let filtroCasos = 'todos';
+try { const f = localStorage.getItem('nodo_filtro_casos'); if (['todos', 'mios', 'libres'].includes(f)) filtroCasos = f; } catch {}
 function pintarLista(incidentes, porId) {
   const items = incidentes.features.map((f) => f.properties);
   const reciente = (a, b) => new Date(b.creado_en) - new Date(a.creado_en);
-  const abiertos = items.filter((p) => p.estado !== 'atendido').sort((a, b) => (b.sos ? 1 : 0) - (a.sos ? 1 : 0) || b.prioridad - a.prioridad || reciente(a, b));
+  const todosAbiertos = items.filter((p) => p.estado !== 'atendido');
+  const abiertos = todosAbiertos.sort((a, b) => (b.sos ? 1 : 0) - (a.sos ? 1 : 0) || b.prioridad - a.prioridad || reciente(a, b));
   const atendidos = items.filter((p) => p.estado === 'atendido').sort(reciente);
 
   // Resumen: casos abiertos por banda de prioridad
@@ -474,12 +503,20 @@ function pintarLista(incidentes, porId) {
     return `<span class="chip"><i class="punto" style="--c:${b.c}"></i><span class="num">${n}</span> ${n === 1 ? b.s : b.pl}</span>`;
   }).join('');
 
+  // Filtro por responsable: Todos, Míos o Sin dueño (solo cambia la lista; el mapa y el resumen muestran todo)
+  const nMios = abiertos.filter(esMio).length, nLibres = abiertos.filter((p) => !p.atiende && !p.peligro).length;
+  const fc = document.getElementById('filtro-casos');
+  fc.innerHTML = [['todos', 'Todos', abiertos.length], ['mios', 'Míos', nMios], ['libres', 'Sin dueño', nLibres]].map(([k, t, n]) =>
+    `<button type="button" data-f="${k}" aria-pressed="${filtroCasos === k}" class="${k === 'libres' && n ? 'hay' : ''}">${t} <span class="num">${n}</span></button>`).join('');
+  fc.querySelectorAll('button').forEach((b) => { b.onclick = () => { filtroCasos = b.dataset.f; try { localStorage.setItem('nodo_filtro_casos', filtroCasos); } catch {} pintarLista(incidentes, porId); }; });
+  const visibles = abiertos.filter((p) => filtroCasos === 'mios' ? esMio(p) : filtroCasos === 'libres' ? (!p.atiende && !p.peligro) : true);
+
   const ul = document.getElementById('lista');
   ul.textContent = '';
-  if (!abiertos.length) {
-    ul.innerHTML = `<li class="vacio">${atendidos.length ? 'No hay casos abiertos. Todos están atendidos.' : 'No hay casos reportados. Cuando llegue uno, aparecerá aquí.'}</li>`;
+  if (!visibles.length) {
+    ul.innerHTML = `<li class="vacio">${abiertos.length ? (filtroCasos === 'mios' ? 'No tienes casos asignados. Toma uno de «Sin dueño».' : 'Todos los casos abiertos ya tienen quién los atienda.') : atendidos.length ? 'No hay casos abiertos. Todos están atendidos.' : 'No hay casos reportados. Cuando llegue uno, aparecerá aquí.'}</li>`;
   }
-  for (const p of abiertos) ul.appendChild(filaCaso(p, porId));
+  for (const p of visibles) ul.appendChild(filaCaso(p, porId));
 
   // El <details> no se vuelve a crear, así que sigue abierto o cerrado como lo dejó el operador
   document.getElementById('atendidos').hidden = !atendidos.length;
@@ -565,6 +602,8 @@ function enlazarPopup(popup) {
   el.querySelectorAll('button[data-del-via]').forEach((b) => { b.onclick = () => pedirEliminar(b, () => borrar(`/api/vias/${b.dataset.delVia}`, 'la vía')); });
   el.querySelectorAll('button[data-ajustar-via]').forEach((b) => { b.onclick = () => ajustarVia(b.dataset.ajustarVia, b); });
   el.querySelectorAll('button[data-via-estado]').forEach((b) => { b.onclick = () => cambiarVia(b.dataset.viaId, b.dataset.viaEstado); });
+  el.querySelectorAll('button[data-tomar]').forEach((b) => { b.onclick = () => accionDueno(b, () => tomarCaso(b.dataset.tomar, !!b.dataset.forzar)); });
+  el.querySelectorAll('button[data-soltar]').forEach((b) => { b.onclick = () => accionDueno(b, () => mandar(`/api/incidentes/${b.dataset.soltar}/soltar`, 'POST', {})); });
   // Si se llegó desde un botón «Enviar: …» de la lista, esa unidad queda elegida
   const pref = window._unidadPref; window._unidadPref = null;
   el.querySelectorAll('.u-form').forEach((f) => { const s = f.querySelector('[data-u-tipo]'); if (s) {
