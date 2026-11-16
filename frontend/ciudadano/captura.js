@@ -18,7 +18,7 @@
   const fmt = (n) => (Math.round(n * 1e5) / 1e5).toFixed(5);
 
   function sellar(video, meta) {
-    const k = Math.min(1, 960 / Math.max(video.videoWidth, video.videoHeight));
+    const k = Math.min(1, 1600 / Math.max(video.videoWidth, video.videoHeight));
     const c = document.createElement('canvas'); c.width = Math.round(video.videoWidth * k); c.height = Math.round(video.videoHeight * k);
     const g = c.getContext('2d'); g.drawImage(video, 0, 0, c.width, c.height);
     const cuando = new Date(meta.t * 1000).toLocaleString('es-EC', { dateStyle: 'short', timeStyle: 'medium' });
@@ -28,7 +28,7 @@
     g.fillStyle = 'rgba(0,0,0,.62)'; g.fillRect(0, c.height - h, c.width, h);
     g.fillStyle = '#fff'; g.font = `600 ${f}px system-ui, sans-serif`; g.textBaseline = 'middle';
     g.fillText(l1, 10, c.height - h * 0.7); g.fillText(l2, 10, c.height - h * 0.3);
-    return c.toDataURL('image/jpeg', 0.72);
+    return c.toDataURL('image/jpeg', 0.86);
   }
 
   // Si la cámara en vivo no está disponible (por ejemplo http sin https), se usa el selector del sistema, SIN prueba de captura.
@@ -38,10 +38,10 @@
       i.onchange = async () => {
         const f = i.files[0]; if (!f) return ok(null);
         try {
-          const b = await createImageBitmap(f, { imageOrientation: 'from-image' }); const k = Math.min(1, 960 / Math.max(b.width, b.height));
+          const b = await createImageBitmap(f, { imageOrientation: 'from-image' }); const k = Math.min(1, 1600 / Math.max(b.width, b.height));
           const c = document.createElement('canvas'); c.width = Math.round(b.width * k); c.height = Math.round(b.height * k);
           c.getContext('2d').drawImage(b, 0, 0, c.width, c.height);
-          ok({ foto: c.toDataURL('image/jpeg', 0.7), captura: { metodo: 'camara_archivo' } });
+          ok({ foto: c.toDataURL('image/jpeg', 0.85), captura: { metodo: 'camara_archivo' } });
         } catch { ok(null); }
       };
       i.oncancel = () => ok(null); i.click();

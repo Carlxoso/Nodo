@@ -5,7 +5,7 @@ const cors = require('cors');
 const pool = require('./db');
 const { recalcular } = require('./prioridad');
 const { iniciarBD } = require('./iniciar-bd');
-const { requiereRol, montarRutas, auditar, autenticarOpcional, migrarUsuarios } = require('./auth');
+const { requiereRol, montarRutas, auditar, autenticarOpcional, migrarUsuarios, verificarToken } = require('./auth');
 const { cabeceras, limitar } = require('./seguridad');
 const { iniciar: iniciarTiempoReal, publicar } = require('./tiempo-real');
 const { migrar, verificarCruzada, verificarTodos } = require('./verificacion');
@@ -13,6 +13,7 @@ const { cargarEscenario } = require('./escenario');
 const { construirTablero } = require('./tablero');
 const { construirInforme } = require('./informe');
 const { migrarFamilias, montarFamilias } = require('./familias');
+const { migrarAtencion, montarAtencion, ATIENDE_SQL, TOMAR_SI_LIBRE_SQL } = require('./atencion');
 const { calcularTendencia } = require('./tendencia');
 const despacho = require('./despacho');
 const capturaMod = require('./captura');
@@ -28,8 +29,12 @@ const app = express();
 app.set('trust proxy', 1); // detrás del proxy de la nube: req.ip es la IP real de la persona (límite de peticiones)
 app.use(cabeceras);
 app.use(cors());
-app.use('/api', limitar({ ventanaMs: 60_000, max: 600 })); // límite general de peticiones por IP
-app.use(express.json({ limit: '2mb' })); // las fotos llegan reducidas (~100-200 KB) en base64
+// Límite general de peticiones. El personal con sesión válida se cuenta POR PERSONA (varios operadores en la misma oficina
+// comparten IP y no deben bloquearse entre sí); el resto, por IP. Un token falso no sirve: se verifica su firma.
+const usuarioDeToken = (req) => { const m = (req.headers.authorization || '').match(/^Bearer (.+)$/); const p = m && verificarToken(m[1]); return p && ['operador', 'admin', 'inst_policia', 'inst_salud', 'inst_bomberos'].includes(p.rol) ? p.sub : null; };
+app.use('/api', limitar({ ventanaMs: 60_000, max: 3000, clave: (req) => 'u' + usuarioDeToken(req), omitir: (req) => !usuarioDeToken(req) }));
+app.use('/api', limitar({ ventanaMs: 60_000, max: 600, omitir: (req) => !!usuarioDeToken(req) }));
+app.use(express.json({ limit: '5mb' })); // las fotos llegan a 1600 px (~300-600 KB) en base64
 montarRutas(app, pool);
 
 // Fotos de reportes (se guardan como archivo; la BD guarda solo la ruta)
@@ -48,7 +53,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const ASIGNACIONES_SQL = `'asignaciones', COALESCE((SELECT json_agg(json_build_object('id', a.id, 'unidad', a.unidad, 'nombre', a.nombre,
   'estado', a.estado, 'asignada_en', a.asignada_en, 'llegada_en', a.llegada_en,
   'sede', (SELECT json_build_object('id', s.id, 'nombre', s.nombre, 'tipo', s.tipo, 'lat', ST_Y(s.geom), 'lon', ST_X(s.geom)) FROM servicios_esenciales s WHERE s.id = a.sede_id)) ORDER BY a.id)
-  FROM asignaciones a WHERE a.incidente_id = t.id AND a.estado <> 'liberada'), '[]'::json)`;
+  FROM asignaciones a WHERE a.incidente_id = t.id AND a.estado <> 'liberada'), '[]'::json), ${ATIENDE_SQL}`;
 
 // Capas públicas del mapa -> GeoJSON FeatureCollection (todo desde PostGIS)
 const CAPAS = {
@@ -56,7 +61,7 @@ const CAPAS = {
   vias:      { tabla: 'vias',                 props: ['id', 'nombre', 'estado', 'fuente'] },
   albergues: { tabla: 'albergues',            props: ['id', 'nombre', 'capacidad', 'ocupacion', 'servicios', 'fuente'] },
   servicios: { tabla: 'servicios_esenciales', props: ['id', 'tipo', 'nombre'] },
-  incidentes:{ extra: ASIGNACIONES_SQL, tabla: 'incidentes',           props: ['id', 'tipo', 'descripcion', 'gravedad', 'personas_afectadas', 'estado', 'fuente', 'confianza', 'prioridad', 'prioridad_desglose', 'creado_en', 'foto', 'confianza_detalle', 'sos', 'peligro', 'tramo', 'recibido_en'] },
+  incidentes:{ extra: `${ASIGNACIONES_SQL}, 'captura_info', (t.captura - 'hash' - 'nonce')`, tabla: 'incidentes',           props: ['id', 'tipo', 'descripcion', 'gravedad', 'personas_afectadas', 'estado', 'fuente', 'confianza', 'prioridad', 'prioridad_desglose', 'creado_en', 'foto', 'confianza_detalle', 'sos', 'peligro', 'tramo', 'recibido_en'] },
 };
 
 async function featureCollection({ tabla, props, extra }) {
@@ -143,7 +148,7 @@ app.patch('/api/incidentes/:id/recibido', soloOperador, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'id inválido' });
   try {
-    const { rows } = await pool.query('UPDATE incidentes SET recibido_en = COALESCE(recibido_en, now()) WHERE id = $1 RETURNING id, recibido_en', [id]);
+    const { rows } = await pool.query(`UPDATE incidentes SET recibido_en = COALESCE(recibido_en, now()), ${TOMAR_SI_LIBRE_SQL} WHERE id = $1 RETURNING id, recibido_en`, [id, req.usuario.id]);
     if (!rows.length) return res.status(404).json({ error: 'no encontrado' });
     await auditar(pool, req.usuario.id, 'marcar_recibido', 'incidente', id);
     publicar({ tipo: 'incidente_estado', id });
@@ -196,7 +201,7 @@ app.post('/api/incidentes/:id/asignaciones', soloOperador, async (req, res) => {
     await cli.query('COMMIT');
     // Al salir una unidad el caso deja de estar pendiente
     const est = (await pool.query(`UPDATE incidentes SET estado = 'en_proceso' WHERE id = $1 AND estado = 'pendiente' RETURNING estado`, [id])).rows[0];
-    await pool.query('UPDATE incidentes SET recibido_en = COALESCE(recibido_en, now()) WHERE id = $1', [id]); // asignar una unidad también es haberlo recibido
+    await pool.query(`UPDATE incidentes SET recibido_en = COALESCE(recibido_en, now()), ${TOMAR_SI_LIBRE_SQL} WHERE id = $1`, [id, req.usuario.id]); // asignar una unidad también es haberlo recibido
     await auditar(pool, req.usuario.id, `asignar_unidad:${unidad}`, 'incidente', id);
     publicar({ tipo: 'incidente_estado', id, estado: est ? est.estado : caso.estado });
     if (sede) publicar({ tipo: 'unidades', sede: sede.sede_id });
@@ -301,6 +306,7 @@ app.patch('/api/sedes/:id/unidades', soloInstitucion, async (req, res) => {
 
 // Módulo 5: familias afectadas y asistencia humanitaria (datos personales cifrados)
 montarFamilias(app, { pool, soloOperador, auditar, publicar, recalcular });
+montarAtencion(app, { pool, soloOperador, auditar, publicar });
 
 // Carga el escenario «Jueves 06:00». Solo un administrador puede pedir además borrar los reportes ciudadanos de prueba.
 app.post('/api/escenario/jueves-0600', soloOperador, async (req, res) => {
@@ -675,8 +681,8 @@ app.post('/api/incidentes', autenticarOpcional, async (req, res) => {
   // Foto opcional: solo JPEG en base64 (la PWA la re-codifica en un canvas, lo que elimina los metadatos EXIF)
   let fotoBuf = null;
   if (foto) {
-    if (typeof foto !== 'string' || foto.length > 1_500_000 || !/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(foto))
-      return res.status(400).json({ error: 'foto inválida (solo JPEG, máx. ~1 MB)' });
+    if (typeof foto !== 'string' || foto.length > 3_500_000 || !/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(foto))
+      return res.status(400).json({ error: 'foto inválida (solo JPEG, máx. ~2,5 MB)' });
     fotoBuf = Buffer.from(foto.split(',')[1], 'base64');
     if (fotoBuf.length < 4 || fotoBuf[0] !== 0xff || fotoBuf[1] !== 0xd8 || fotoBuf[2] !== 0xff)
       return res.status(400).json({ error: 'la foto no es un JPEG válido' });
@@ -726,6 +732,7 @@ iniciarBD(pool)
   .then(() => migrarBomberos(pool))
   .then(() => migrarLugares(pool))
   .then(() => migrarFamilias(pool))
+  .then(() => migrarAtencion(pool))
   .then(() => despacho.migrarDespacho(pool))
   .then(() => verificarTodos())
   .then(() => recalcular())

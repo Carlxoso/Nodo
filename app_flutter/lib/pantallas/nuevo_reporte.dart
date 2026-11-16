@@ -55,7 +55,7 @@ class _NuevoReporteState extends State<NuevoReporte> {
   Future<void> elegirFoto() async {
     try {
       final nonce = await Api.desafioCaptura(); // se pide antes de abrir la cámara
-      final x = await ImagePicker().pickImage(source: ImageSource.camera, maxWidth: 960, maxHeight: 960, imageQuality: 70);
+      final x = await ImagePicker().pickImage(source: ImageSource.camera, maxWidth: 1600, maxHeight: 1600, imageQuality: 85);
       if (x == null) return;
       final t = DateTime.now().millisecondsSinceEpoch ~/ 1000;
       Position? pos;

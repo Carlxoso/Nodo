@@ -91,6 +91,7 @@ async function validar({ captura, lat, lon, fotoBuf, db }) {
 
   res.nonce = typeof captura.nonce === 'string' ? captura.nonce : null;
   res.t = Number.isFinite(Number(captura.t)) ? Number(captura.t) : null;
+  if (Number.isFinite(cl) && Number.isFinite(co)) { res.lat = Math.round(cl * 1e6) / 1e6; res.lon = Math.round(co * 1e6) / 1e6; }
   if (!motivos.length) res.nivel = 'verificada';
   return res;
 }
